@@ -1,0 +1,85 @@
+// Схема базы Content CRM.
+// Правило мультипроектности: каждая таблица с данными проекта содержит
+// workspaceId и projectId. Доступ к данным идёт только через lib/db/*.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  OWNER // владелец: видит всё
+  MANAGER // менеджер: клиенты, заявки, задачи
+  ASSISTANT // ассистент: контент-план и завод
+  SMM // SMM: контент-план и завод
+}
+
+/// Пользователь сервиса. id совпадает с id пользователя в Supabase Auth.
+model User {
+  id          String       @id @db.Uuid
+  email       String       @unique
+  name        String?
+  avatarUrl   String?
+  createdAt   DateTime     @default(now())
+  memberships Membership[]
+  invitesSent Invite[]     @relation("InvitedBy")
+}
+
+/// Рабочее пространство. У каждого клиента сервиса своё.
+model Workspace {
+  id          String       @id @default(cuid())
+  name        String
+  /// Тариф: ключ из config/plans.ts
+  plan        String       @default("free")
+  createdAt   DateTime     @default(now())
+  memberships Membership[]
+  projects    Project[]
+  invites     Invite[]
+}
+
+model Membership {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String    @db.Uuid
+  role        Role
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+/// Приглашение в пространство по email. Принимается по ссылке /invite/<token>.
+model Invite {
+  id          String    @id @default(cuid())
+  workspaceId String
+  email       String
+  role        Role
+  token       String    @unique
+  invitedById String    @db.Uuid
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy   User      @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+/// Проект: «Мой блог», «Клиент: автоподбор»…
+model Project {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  color       String    @default("#6366f1")
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
