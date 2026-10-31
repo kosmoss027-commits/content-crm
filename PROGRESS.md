@@ -38,10 +38,19 @@ npm run dev             # http://localhost:3000
 npm test                # автотесты
 ```
 
+### Где что развёрнуто
+- **Сайт:** https://content-crm.onrender.com (Render, тариф Free, регион Frankfurt). Сборка из GitHub `kosmoss027-commits/content-crm`, ветка `main`: каждый push выкладывается автоматически. Build: `npm ci && npm run build`, Start: `npm start`.
+- **База и вход:** Supabase, проект `Content-CRM` (Frankfurt). Data API выключен. Redirect URLs: localhost и onrender.
+- **Почему Render, а не Railway:** у Railway закрыта регистрация после сбоя 21.10.2026, Vercel не пропустил проверку аккаунта. Код и данные от хостинга не зависят — переезд при желании занимает ~20 минут. `railway.json` оставлен на этот случай.
+- **Ограничения Free на Render:** сайт засыпает после 15 минут без заходов, первое открытие ~1 минута. Starter ($7/мес) — без засыпания.
+- **Миграции на проде** пока запускаются вручную с компьютера: `npm run db:deploy` (на Free нет pre-deploy команды).
+- **Пароль базы:** вписывается в `.env` через `npm.cmd run db:password`. Переменные для Render — в `.env.render` (не в git).
+
 ### Что осталось на этапе 1
-- [ ] Создать проект Supabase, включить Email и Google, вписать ключи в `.env`.
-- [ ] Создать репозиторий на GitHub и запушить.
-- [ ] Деплой на Railway (`railway.json` уже есть: сборка, миграции перед стартом, запуск).
+- [x] Supabase: проект, вход по email, ключи.
+- [x] GitHub: приватный репозиторий.
+- [x] Деплой (Render).
+- [ ] Вход через Google (нужен OAuth-клиент в Google Cloud) — можно позже.
 - [ ] Проверка Амином по ссылке.
 
 ## Дальше: этап 2 «Разведка»
