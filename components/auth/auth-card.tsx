@@ -18,7 +18,7 @@ export function AuthCard({
         {description && <CardDescription>{description}</CardDescription>}
       </CardHeader>
       {children && <CardContent className="grid gap-4">{children}</CardContent>}
-      {footer && <CardFooter className="justify-center text-sm text-muted-foreground">{footer}</CardFooter>}
+      {footer && <CardFooter className="justify-center gap-1 text-sm text-muted-foreground">{footer}</CardFooter>}
     </Card>
   );
 }
