@@ -8,19 +8,21 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AccessibleProject } from "@/lib/db/projects";
 import { ProjectSwitcher } from "@/components/layout/project-switcher";
-import { Sidebar, type SidebarSection } from "@/components/layout/sidebar";
+import { Sidebar, type SidebarSection, type SidebarSpend } from "@/components/layout/sidebar";
 import { UserMenu, type UserSummary } from "@/components/layout/user-menu";
 
 export function AppHeader({
   projectId,
   projects,
   sections,
+  spend,
   user,
   canManageProjects,
 }: {
   projectId: string;
   projects: AccessibleProject[];
   sections: SidebarSection[];
+  spend?: SidebarSpend;
   user: UserSummary;
   canManageProjects: boolean;
 }) {
@@ -36,7 +38,7 @@ export function AppHeader({
         </SheetTrigger>
         <SheetContent side="left" className="w-64 bg-sidebar p-0">
           <SheetTitle className="sr-only">Меню</SheetTitle>
-          <Sidebar projectId={projectId} sections={sections} onNavigate={() => setMenuOpen(false)} />
+          <Sidebar projectId={projectId} sections={sections} spend={spend} onNavigate={() => setMenuOpen(false)} />
         </SheetContent>
       </Sheet>
 

@@ -1,10 +1,12 @@
+import { SCRAPE_BUDGET, SCRAPE_SCHEDULE } from "@/config/scraping";
 import { can } from "@/lib/auth/permissions";
 import { requireProjectContext } from "@/lib/auth/session";
+import { prisma } from "@/lib/db/prisma";
 import { listWorkspaceProjects } from "@/lib/db/projects";
 import { getWorkspaceUsage } from "@/lib/db/workspaces";
 import { Badge } from "@/components/ui/badge";
 import { NoAccess, PageHeader } from "@/components/section-placeholder";
-import { CreateProjectForm, ProjectRow, WorkspaceNameForm } from "@/components/settings/settings-client";
+import { CreateProjectForm, ProjectRow, ThresholdsForm, WorkspaceNameForm } from "@/components/settings/settings-client";
 
 export const metadata = { title: "Настройки — Content CRM" };
 
@@ -13,7 +15,11 @@ export default async function SettingsPage({ params }: PageProps<"/p/[projectId]
   const ctx = await requireProjectContext(projectId);
   if (!can(ctx.role, "settings.view")) return <NoAccess />;
 
-  const [projects, usage] = await Promise.all([listWorkspaceProjects(ctx), getWorkspaceUsage(ctx)]);
+  const [projects, usage, thresholds] = await Promise.all([
+    listWorkspaceProjects(ctx),
+    getWorkspaceUsage(ctx),
+    prisma.project.findUniqueOrThrow({ where: { id: ctx.projectId }, select: { viralThreshold: true, anomalyThreshold: true } }),
+  ]);
 
   return (
     <>
@@ -61,8 +67,22 @@ export default async function SettingsPage({ params }: PageProps<"/p/[projectId]
           <p className="text-xs text-muted-foreground">Лимиты тарифов задаются в config/plans.ts.</p>
         </SettingsBlock>
 
-        <SettingsBlock title="Ключи API пространства">
-          <Upcoming stage={2} text="Apify, Claude и сервис распознавания речи. Пока ключи задаются в .env на сервере." />
+        <SettingsBlock title="Разведка: залёты" id="research">
+          <ThresholdsForm projectId={projectId} viral={thresholds.viralThreshold} anomaly={thresholds.anomalyThreshold} />
+          <ul className="grid gap-1 text-sm text-muted-foreground">
+            <li>
+              Плановый сбор: раз в {SCRAPE_SCHEDULE.everyDays} дн. в {String(SCRAPE_SCHEDULE.hour).padStart(2, "0")}:00
+              ({SCRAPE_SCHEDULE.timeZone}), ролики за последние {SCRAPE_SCHEDULE.windowDays} дн.
+            </li>
+            <li>
+              Лимит расходов на сбор: ${SCRAPE_BUDGET.monthlyUsd} в месяц, ${SCRAPE_BUDGET.perRunUsd} за один запуск.
+            </li>
+            <li className="text-xs">Расписание и лимиты задаются в config/scraping.ts.</li>
+          </ul>
+        </SettingsBlock>
+
+        <SettingsBlock title="Ключи API">
+          <Upcoming stage={3} text="Apify подключён на сервере. Ключи Claude и распознавания речи понадобятся на этапе 3." />
         </SettingsBlock>
 
         <SettingsBlock title="Шаблон сценария">

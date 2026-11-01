@@ -1,0 +1,98 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { formText, runAction, type ActionState } from "@/lib/actions";
+import { requireProjectContext } from "@/lib/auth/session";
+import { AppError } from "@/lib/db/errors";
+import { toggleReelMark } from "@/lib/db/reels";
+import { addAccounts, removeEntry, updateEntry, usernamesForManualCollect } from "@/lib/db/watchlist";
+import { startCollection } from "@/lib/research/collect";
+import { syncPendingRuns } from "@/lib/research/ingest";
+import type { Market, WatchStatus } from "@/lib/generated/prisma/enums";
+
+// projectId всегда из URL: доступ проверяется заново в каждом действии.
+
+function refresh(projectId: string) {
+  revalidatePath(`/p/${projectId}`, "layout");
+}
+
+export async function addAccountsAction(projectId: string, _prev: ActionState, formData: FormData): Promise<ActionState> {
+  let message = "";
+  const result = await runAction(async () => {
+    const ctx = await requireProjectContext(projectId);
+    const market = formText(formData, "market") === "FOREIGN" ? "FOREIGN" : "CIS";
+    const added = await addAccounts(ctx, formText(formData, "usernames"), market);
+
+    const parts = [`Добавлено: ${added.added.length}`];
+    if (added.alreadyWatched.length) parts.push(`уже были: ${added.alreadyWatched.join(", ")}`);
+    if (added.invalid.length) parts.push(`не похоже на ник: ${added.invalid.join(", ")}`);
+    message = parts.join(". ");
+
+    if (added.needInitial.length) {
+      const base = { workspaceId: ctx.workspaceId, projectId: ctx.projectId, usernames: added.needInitial };
+      const reels = await startCollection({ ...base, kind: "INITIAL" });
+      await startCollection({ ...base, kind: "PROFILE" });
+      message += `. ${reels.message}`;
+    }
+  });
+  refresh(projectId);
+  return result?.ok ? { ok: true, message } : result;
+}
+
+export async function updateEntryAction(
+  projectId: string,
+  entryId: string,
+  input: { status?: WatchStatus; market?: Market; niche?: string | null },
+): Promise<ActionState> {
+  const result = await runAction(async () => {
+    const ctx = await requireProjectContext(projectId);
+    await updateEntry(ctx, entryId, input);
+  });
+  refresh(projectId);
+  return result;
+}
+
+export async function removeEntryAction(projectId: string, entryId: string): Promise<ActionState> {
+  const result = await runAction(async () => {
+    const ctx = await requireProjectContext(projectId);
+    await removeEntry(ctx, entryId);
+  }, "Аккаунт убран из разведки");
+  refresh(projectId);
+  return result;
+}
+
+export async function collectNowAction(projectId: string, entryId?: string): Promise<ActionState> {
+  let message = "";
+  const result = await runAction(async () => {
+    const ctx = await requireProjectContext(projectId);
+    const { usernames, initial } = await usernamesForManualCollect(ctx, entryId);
+    const outcome = await startCollection({
+      kind: initial ? "INITIAL" : "MANUAL",
+      usernames,
+      workspaceId: ctx.workspaceId,
+      projectId: ctx.projectId,
+    });
+    if (outcome.status !== "started") throw new AppError("CONFLICT", outcome.message);
+    message = outcome.message;
+  });
+  refresh(projectId);
+  return result?.ok ? { ok: true, message } : result;
+}
+
+export async function toggleMarkAction(projectId: string, reelId: string): Promise<ActionState> {
+  let marked = false;
+  const result = await runAction(async () => {
+    const ctx = await requireProjectContext(projectId);
+    marked = await toggleReelMark(ctx, reelId);
+  });
+  refresh(projectId);
+  return result?.ok ? { ok: true, message: marked ? "Отмечено: в работу" : "Отметка снята" } : result;
+}
+
+/** Забрать результаты завершившихся сборов (локально и если webhook не дошёл). */
+export async function syncRunsAction(projectId: string): Promise<number> {
+  await requireProjectContext(projectId);
+  const finished = await syncPendingRuns();
+  if (finished > 0) refresh(projectId);
+  return finished;
+}

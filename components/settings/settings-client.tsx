@@ -12,6 +12,7 @@ import {
   renameWorkspaceAction,
   restoreProjectAction,
   updateProjectAction,
+  updateThresholdsAction,
 } from "@/app/(app)/p/[projectId]/settings/actions";
 
 const PROJECT_COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899", "#a855f7", "#64748b"];
@@ -122,6 +123,22 @@ export function CreateProjectForm({ projectId }: { projectId: string }) {
         aria-label="Название нового проекта"
       />
       <SubmitButton size="sm">Добавить проект</SubmitButton>
+    </form>
+  );
+}
+
+export function ThresholdsForm({ projectId, viral, anomaly }: { projectId: string; viral: number; anomaly: number }) {
+  const [state, action] = useActionState(updateThresholdsAction.bind(null, projectId), null);
+  useActionToast(state);
+  return (
+    <form action={action} className="flex flex-wrap items-end gap-3">
+      <div className="w-36">
+        <Field label="Залёт от ×" name="viral" type="number" step="0.5" min="1.5" defaultValue={viral} required />
+      </div>
+      <div className="w-36">
+        <Field label="Аномалия от ×" name="anomaly" type="number" step="1" min="2" defaultValue={anomaly} required />
+      </div>
+      <SubmitButton variant="secondary">Сохранить</SubmitButton>
     </form>
   );
 }
