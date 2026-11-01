@@ -10,7 +10,7 @@ import { SectionIcon } from "@/components/layout/section-icon";
 export type SidebarSection = Pick<Section, "slug" | "title" | "icon" | "group" | "stage">;
 
 /** Расходы на сбор роликов: показываем ролям с доступом к разведке. */
-export type SidebarSpend = { todayUsd: number; monthUsd: number; monthItems: number; limitUsd: number; limitReached: boolean };
+export type SidebarSpend = { todayUsd: number; monthUsd: number; monthItems: number; limitUsd: number; limitReached: boolean; aiMonthUsd: number; aiLimitUsd: number };
 
 const GROUP_ORDER: SectionGroup[] = ["factory", "crm", "system"];
 
@@ -32,6 +32,12 @@ function SpendWidget({ spend }: { spend: SidebarSpend }) {
         <span>{spend.monthItems} роликов</span>
       </div>
       {spend.limitReached && <p className="text-destructive">Лимит исчерпан — сбор остановлен</p>}
+      <div className="flex justify-between border-t pt-1.5 text-muted-foreground tabular-nums">
+        <span>ИИ за месяц</span>
+        <span className={spend.aiMonthUsd >= spend.aiLimitUsd ? "text-destructive" : undefined}>
+          ${spend.aiMonthUsd.toFixed(2)} / ${spend.aiLimitUsd}
+        </span>
+      </div>
     </div>
   );
 }

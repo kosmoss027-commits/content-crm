@@ -13,6 +13,7 @@ import { FeedFilters } from "@/components/research/feed-filters";
 import { ReelGrid } from "@/components/research/reel-grid";
 import { RunningWatcher } from "@/components/research/running-watcher";
 import { RunsLog } from "@/components/research/runs-log";
+import { HooksTab, HypothesesTab, WorksTab } from "@/components/factory/research-tabs";
 
 export const metadata = { title: "Разведка — Content CRM" };
 
@@ -20,9 +21,9 @@ const TABS = [
   { id: "reels", title: "Ролики" },
   { id: "accounts", title: "Аккаунты" },
   { id: "log", title: "Журнал сбора" },
-  { id: "hooks", title: "Хуки", stage: 3 },
-  { id: "works", title: "Что работает", stage: 3 },
-  { id: "hypotheses", title: "Гипотезы", stage: 3 },
+  { id: "hooks", title: "Хуки" },
+  { id: "works", title: "Что работает" },
+  { id: "hypotheses", title: "Гипотезы" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -61,7 +62,6 @@ export default async function ResearchPage({ params, searchParams }: PageProps<"
             )}
           >
             {t.title}
-            {"stage" in t && <span className="ml-1 text-[10px]">эт. {t.stage}</span>}
           </Link>
         ))}
       </nav>
@@ -69,11 +69,9 @@ export default async function ResearchPage({ params, searchParams }: PageProps<"
       {tab === "reels" && <ReelsTab projectId={projectId} query={query} canManage={canManage} />}
       {tab === "accounts" && <AccountsTab projectId={projectId} canManage={canManage} />}
       {tab === "log" && <RunsLog runs={await listRunsForProject(ctx)} />}
-      {(tab === "hooks" || tab === "works" || tab === "hypotheses") && (
-        <p className="rounded-xl border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
-          Появится на этапе 3, вместе с разбором роликов через Claude.
-        </p>
-      )}
+      {tab === "hooks" && <HooksTab ctx={ctx} query={query} canEdit={canManage} />}
+      {tab === "works" && <WorksTab ctx={ctx} query={query} />}
+      {tab === "hypotheses" && <HypothesesTab ctx={ctx} canEdit={canManage} />}
     </>
   );
 }

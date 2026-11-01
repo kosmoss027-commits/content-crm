@@ -1,6 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { requestAnalysis } from "@/lib/db/analysis";
+import { runAiPipelineOnce } from "@/lib/ai/run";
 import { formText, runAction, type ActionState } from "@/lib/actions";
 import { requireProjectContext } from "@/lib/auth/session";
 import { AppError } from "@/lib/db/errors";
@@ -84,9 +87,12 @@ export async function toggleMarkAction(projectId: string, reelId: string): Promi
   const result = await runAction(async () => {
     const ctx = await requireProjectContext(projectId);
     marked = await toggleReelMark(ctx, reelId);
+    // «В работу» — ролик разбирается вне очереди, без проверки на пользу.
+    if (marked) await requestAnalysis(ctx, reelId);
   });
+  if (result?.ok && marked) after(() => runAiPipelineOnce() ?? undefined);
   refresh(projectId);
-  return result?.ok ? { ok: true, message: marked ? "Отмечено: в работу" : "Отметка снята" } : result;
+  return result?.ok ? { ok: true, message: marked ? "В работе: ролик разбирается первым" : "Отметка снята" } : result;
 }
 
 /** Забрать результаты завершившихся сборов (локально и если webhook не дошёл). */

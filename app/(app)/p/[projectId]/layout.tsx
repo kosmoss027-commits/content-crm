@@ -3,6 +3,8 @@ import { requireProjectContext, requireUser } from "@/lib/auth/session";
 import { listAccessibleProjects } from "@/lib/db/projects";
 import { canOpenSection, sectionsForRole } from "@/lib/navigation";
 import { getSpendSummary } from "@/lib/research/budget";
+import { aiSpentThisMonth } from "@/lib/ai/usage";
+import { AI_LIMITS } from "@/config/ai";
 import { AppHeader } from "@/components/layout/app-header";
 import { RememberProject } from "@/components/layout/remember-project";
 import { Sidebar, type SidebarSection, type SidebarSpend } from "@/components/layout/sidebar";
@@ -11,9 +13,10 @@ export default async function ProjectLayout({ children, params }: LayoutProps<"/
   const { projectId } = await params;
   const [user, ctx] = await Promise.all([requireUser(), requireProjectContext(projectId)]);
   const showSpend = canOpenSection(ctx.role, "research");
-  const [projects, summary] = await Promise.all([
+  const [projects, summary, aiMonthUsd] = await Promise.all([
     listAccessibleProjects(user.id),
     showSpend ? getSpendSummary() : null,
+    showSpend ? aiSpentThisMonth() : 0,
   ]);
   const spend: SidebarSpend | undefined = summary
     ? {
@@ -22,6 +25,8 @@ export default async function ProjectLayout({ children, params }: LayoutProps<"/
         monthItems: summary.month.items,
         limitUsd: summary.monthlyLimitUsd,
         limitReached: summary.limitReached,
+        aiMonthUsd,
+        aiLimitUsd: AI_LIMITS.monthlyUsd,
       }
     : undefined;
 

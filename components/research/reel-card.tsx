@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useTransition } from "react";
 import { ExternalLinkIcon, FlameIcon, PlayIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -86,6 +87,9 @@ export function ReelCard({ projectId, reel, canMark }: { projectId: string; reel
               {reel.marked ? "В работе ✓" : "В работу"}
             </Button>
           )}
+          <Button size="sm" variant="ghost" asChild>
+            <Link href={`/p/${projectId}/research/reel/${reel.id}`}>Разбор</Link>
+          </Button>
           <Button size="sm" variant="ghost" asChild aria-label="Открыть в Instagram">
             <a href={reel.url} target="_blank" rel="noreferrer">
               <ExternalLinkIcon />
