@@ -73,13 +73,149 @@ model Invite {
 
 /// Проект: «Мой блог», «Клиент: автоподбор»…
 model Project {
-  id          String    @id @default(cuid())
-  workspaceId String
-  name        String
-  color       String    @default("#6366f1")
-  archivedAt  DateTime?
-  createdAt   DateTime  @default(now())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id               String           @id @default(cuid())
+  workspaceId      String
+  name             String
+  color            String           @default("#6366f1")
+  archivedAt       DateTime?
+  createdAt        DateTime         @default(now())
+  /// Порог «залёта» и «аномального залёта»: просмотры / медиана аккаунта
+  viralThreshold   Float            @default(3)
+  anomalyThreshold Float            @default(10)
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  watchlist        WatchlistEntry[]
+  reelMarks        ReelMark[]
 
   @@index([workspaceId])
+}
+
+// ─── Разведка ───────────────────────────────────────────────
+// Аккаунты и ролики конкурентов общие на всю систему: один аккаунт собирается один раз,
+// даже если его отслеживают несколько проектов. Что видит проект, решает WatchlistEntry.
+
+enum WatchStatus {
+  WATCHING
+  PAUSED
+  CANDIDATE
+}
+
+enum Market {
+  CIS
+  FOREIGN
+}
+
+enum ScrapeRunKind {
+  INITIAL // первый сбор нового аккаунта: последние ролики для медианы
+  SCHEDULED // плановый сбор по расписанию
+  MANUAL // кнопка «Собрать сейчас»
+  PROFILE // подписчики и аватар
+}
+
+enum ScrapeRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED // не запущен: превышен лимит расходов
+}
+
+model ScrapedAccount {
+  id                 String           @id @default(cuid())
+  username           String           @unique
+  fullName           String?
+  avatarUrl          String?
+  followers          Int?
+  medianViews        Int?
+  reelsCount         Int              @default(0)
+  viralCount         Int              @default(0)
+  avgViralMultiplier Float?
+  rating             Float?
+  lastScrapedAt      DateTime?
+  lastProfileAt      DateTime?
+  lastError          String?
+  createdAt          DateTime         @default(now())
+  reels              ScrapedReel[]
+  watches            WatchlistEntry[]
+}
+
+model ScrapedReel {
+  id             String         @id @default(cuid())
+  shortCode      String         @unique
+  accountId      String
+  url            String
+  postedAt       DateTime
+  caption        String?
+  /// Просмотры (plays) — та же цифра, что показывает Instagram
+  views          Int
+  likes          Int?
+  comments       Int?
+  durationSec    Float?
+  videoUrl       String?
+  coverUrl       String?
+  musicTitle     String?
+  musicArtist    String?
+  hashtags       String[]
+  isPinned       Boolean        @default(false)
+  /// views / медиана аккаунта на момент последнего пересчёта
+  multiplier     Float?
+  firstSeenAt    DateTime       @default(now())
+  viewsUpdatedAt DateTime       @default(now())
+  account        ScrapedAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  marks          ReelMark[]
+
+  @@index([accountId, postedAt])
+  @@index([postedAt])
+}
+
+/// Аккаунт в разведке конкретного проекта.
+model WatchlistEntry {
+  id          String         @id @default(cuid())
+  workspaceId String
+  projectId   String
+  accountId   String
+  status      WatchStatus    @default(WATCHING)
+  market      Market         @default(CIS)
+  niche       String?
+  createdAt   DateTime       @default(now())
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  account     ScrapedAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, accountId])
+  @@index([workspaceId])
+  @@index([accountId])
+}
+
+/// Отметка «В работу» на ролике (радар трендов, лента залётов).
+model ReelMark {
+  id          String      @id @default(cuid())
+  workspaceId String
+  projectId   String
+  reelId      String
+  createdAt   DateTime    @default(now())
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reel        ScrapedReel @relation(fields: [reelId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, reelId])
+}
+
+/// Журнал сбора и учёт расходов.
+model ScrapeRun {
+  id             String          @id @default(cuid())
+  kind           ScrapeRunKind
+  status         ScrapeRunStatus
+  /// Кто запустил вручную (для плановых сборов пусто)
+  workspaceId    String?
+  projectId      String?
+  apifyRunId     String?         @unique
+  usernames      String[]
+  itemsCount     Int             @default(0)
+  estimatedUsd   Float           @default(0)
+  costUsd        Float           @default(0)
+  error          String?
+  /// Аккаунты, по которым сборщик вернул ошибку: «ник: причина»
+  failedAccounts String[]
+  startedAt      DateTime        @default(now())
+  finishedAt     DateTime?
+
+  @@index([startedAt])
+  @@index([status])
 }

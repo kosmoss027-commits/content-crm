@@ -1,0 +1,22 @@
+# Раз в час будит приложение: оно само решает, пора ли запускать плановый сбор роликов
+# (расписание — config/scraping.ts), и забирает результаты, если webhook от Apify не дошёл.
+# Нужны секреты репозитория: APP_URL (https://content-crm.onrender.com) и CRON_SECRET.
+name: cron
+
+on:
+  schedule:
+    - cron: "5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Call /api/cron
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 300 --retry 2 --retry-delay 30 \
+            -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron"

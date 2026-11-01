@@ -15,6 +15,8 @@ async function main() {
     password: "postgres",
     port: PORT,
     persistent: true,
+    // Без этого на русской Windows база создаётся в WIN1251 и не принимает часть символов
+    initdbFlags: ["--encoding=UTF8", "--locale=C"],
   });
 
   if (!existsSync(path.join(DATA_DIR, "PG_VERSION"))) {

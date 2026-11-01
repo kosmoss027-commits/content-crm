@@ -4,7 +4,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { redirectKeepingCookies, updateSupabaseSession } from "@/lib/supabase/proxy";
 
 // Страницы, открытые без входа.
-const PUBLIC_PREFIXES = ["/login", "/signup", "/forgot-password", "/auth", "/invite"];
+const PUBLIC_PREFIXES = ["/login", "/signup", "/forgot-password", "/auth", "/invite", "/api/webhooks", "/api/cron"];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
