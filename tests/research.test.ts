@@ -172,6 +172,20 @@ describe("разведка: сбор и лимиты", () => {
     expect(run).toMatchObject({ status: "SUCCEEDED", costUsd: 0.1, itemsCount: 13 });
   });
 
+  it("ролики соавторов не создают лишних аккаунтов", async () => {
+    await setup();
+    const { provider } = fakeProvider({
+      reels: [reel("alpha", "own", 100, 1), reel("coauthor", "collab", 5000, 1)],
+      profiles: [],
+      failures: [],
+    });
+    await startCollection({ kind: "MANUAL", usernames: ["alpha"] }, provider);
+    await syncPendingRuns(provider);
+
+    expect((await prisma.scrapedAccount.findMany()).map((a) => a.username)).toEqual(["alpha"]);
+    expect((await prisma.scrapedReel.findMany()).map((r) => r.shortCode)).toEqual(["own"]);
+  });
+
   it("повторный сбор обновляет просмотры, а не дублирует ролики", async () => {
     await setup();
     const first = fakeProvider({ reels: [reel("alpha", "r1", 100, 1)], profiles: [], failures: [] });

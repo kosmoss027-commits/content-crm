@@ -87,8 +87,11 @@ export async function syncRun(run: ScrapeRun, provider: ScraperProvider = scrape
   if (state.status === "running") return false;
 
   const kind = run.kind === "PROFILE" ? "profiles" : "reels";
-  const result = await provider.getRunResult(run.apifyRunId, kind);
-  const ids = await accountIdsByUsername([...run.usernames, ...result.reels.map((r) => r.username)]);
+  const fetched = await provider.getRunResult(run.apifyRunId, kind);
+  // Совместные ролики приходят с владельцем-соавтором: сохраняем только ролики запрошенных аккаунтов.
+  const requested = new Set(run.usernames);
+  const result = { ...fetched, reels: fetched.reels.filter((reel) => requested.has(reel.username)) };
+  const ids = await accountIdsByUsername(run.usernames);
 
   if (kind === "reels") await saveReels(result, ids, now);
   else await saveProfiles(result, now);
