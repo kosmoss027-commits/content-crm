@@ -19,15 +19,18 @@ import {
   setHypothesisStatus,
   updateScript,
 } from "@/lib/db/scripts";
-import { claudeClient } from "@/lib/ai/claude";
-import { isAiConfigured, runAiPipelineOnce } from "@/lib/ai/run";
+
+import { activeLlm, isAiConfigured, runAiPipelineOnce } from "@/lib/ai/run";
+import type { LlmClient } from "@/lib/ai/types";
 
 function refresh(projectId: string) {
   revalidatePath(`/p/${projectId}`, "layout");
 }
 
-function assertAi() {
-  if (!isAiConfigured()) throw new AppError("CONFLICT", "Claude ещё не подключён: нужен ключ ANTHROPIC_API_KEY на сервере.");
+function requireLlm(): LlmClient {
+  const llm = activeLlm();
+  if (!llm) throw new AppError("CONFLICT", "Claude ещё не подключён: нужен ключ OPENROUTER_API_KEY или ANTHROPIC_API_KEY на сервере.");
+  return llm;
 }
 
 export async function saveBrandAction(projectId: string, _prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -52,9 +55,9 @@ export async function requestAnalysisAction(projectId: string, reelId: string): 
 
 export async function createScriptAction(projectId: string, source: { analysisId?: string; idea?: string }): Promise<ActionState> {
   const result = await runAction(async () => {
-    assertAi();
+    const llm = requireLlm();
     const ctx = await requireProjectContext(projectId);
-    await createScript(ctx, source, claudeClient);
+    await createScript(ctx, source, llm);
   }, "Сценарий готов — он в разделе «Сегодня», на одобрении.");
   refresh(projectId);
   return result;
@@ -62,9 +65,9 @@ export async function createScriptAction(projectId: string, source: { analysisId
 
 export async function reviseScriptAction(projectId: string, scriptId: string, instruction: string): Promise<ActionState> {
   const result = await runAction(async () => {
-    assertAi();
+    const llm = requireLlm();
     const ctx = await requireProjectContext(projectId);
-    await reviseProjectScript(ctx, scriptId, instruction, claudeClient);
+    await reviseProjectScript(ctx, scriptId, instruction, llm);
   }, "Сценарий переписан с учётом правки");
   refresh(projectId);
   return result;

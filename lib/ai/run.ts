@@ -1,21 +1,29 @@
 // Запуск конвейера разбора с настоящими сервисами. Один запуск за раз на процесс.
 import { claudeClient } from "@/lib/ai/claude";
 import { ffmpegMediaProcessor } from "@/lib/ai/media";
+import { openRouterClient } from "@/lib/ai/openrouter";
 import { runAiPipeline, type PipelineReport } from "@/lib/ai/pipeline";
-import type { AiServices } from "@/lib/ai/types";
+import type { AiServices, LlmClient } from "@/lib/ai/types";
 
-export const realAiServices: AiServices = { llm: claudeClient, media: ffmpegMediaProcessor };
+/** Провайдер Claude: напрямую от Anthropic, если есть их ключ, иначе через OpenRouter. */
+export function activeLlm(): LlmClient | null {
+  if (process.env.ANTHROPIC_API_KEY) return claudeClient;
+  if (process.env.OPENROUTER_API_KEY) return openRouterClient;
+  return null;
+}
+
+export function isAiConfigured(): boolean {
+  return activeLlm() !== null;
+}
 
 let running: Promise<PipelineReport> | null = null;
 
-export function isAiConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY);
-}
-
 /** Если конвейер уже идёт, второй не запускается — вернётся текущий. */
 export function runAiPipelineOnce(): Promise<PipelineReport> | null {
-  if (!isAiConfigured()) return null;
-  running ??= runAiPipeline(realAiServices)
+  const llm = activeLlm();
+  if (!llm) return null;
+  const services: AiServices = { llm, media: ffmpegMediaProcessor };
+  running ??= runAiPipeline(services)
     .catch((error) => {
       console.error("Конвейер разбора упал:", error);
       return { queued: 0, processed: 0, drafts: 0, stoppedByLimit: false };

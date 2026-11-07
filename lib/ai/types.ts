@@ -15,7 +15,14 @@ export type LlmRequest<T> = {
 
 export type LlmResult<T> = {
   data: T;
-  usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number };
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    /** Стоимость, если её сообщил сам провайдер (OpenRouter); иначе считаем по ценам из config/ai.ts */
+    costUsd?: number;
+  };
 };
 
 export interface LlmClient {

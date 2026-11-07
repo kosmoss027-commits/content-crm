@@ -8,6 +8,7 @@ import type { LlmResult } from "@/lib/ai/types";
 const MILLION = 1_000_000;
 
 export function claudeCostUsd(model: string, usage: LlmResult<unknown>["usage"]): number {
+  if (usage.costUsd !== undefined) return usage.costUsd;
   const price = CLAUDE_PRICES[model];
   if (!price) return 0;
   return (
