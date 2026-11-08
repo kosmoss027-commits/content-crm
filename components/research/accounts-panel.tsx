@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { notify, SubmitButton, useActionToast } from "@/components/forms";
 import {
   addAccountsAction,
+  collectEverythingAction,
   collectNowAction,
   removeEntryAction,
   updateEntryAction,
@@ -229,9 +230,9 @@ export function AccountsTable({ projectId, rows, canManage }: { projectId: strin
 export function CollectAllButton({ projectId }: { projectId: string }) {
   const [pending, startTransition] = useTransition();
   return (
-    <Button size="sm" variant="outline" disabled={pending} onClick={() => startTransition(async () => notify(await collectNowAction(projectId)))}>
-      <RefreshCwIcon />
-      Собрать все сейчас
+    <Button size="sm" variant="outline" disabled={pending} onClick={() => startTransition(async () => notify(await collectEverythingAction(projectId)))}>
+      <RefreshCwIcon className={pending ? "animate-spin" : undefined} />
+      {pending ? "Запускаю…" : "Собрать и разобрать всё"}
     </Button>
   );
 }

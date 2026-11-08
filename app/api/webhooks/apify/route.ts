@@ -1,4 +1,5 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
+import { runAiPipelineOnce } from "@/lib/ai/run";
 import { prisma } from "@/lib/db/prisma";
 import { syncRun } from "@/lib/research/ingest";
 import { secretMatches } from "@/lib/secrets";
@@ -17,7 +18,9 @@ export async function POST(request: NextRequest) {
   if (!run) return NextResponse.json({ ok: true, ignored: true });
 
   try {
-    await syncRun(run);
+    const finished = await syncRun(run);
+    // Новые ролики пришли — сразу разбираем свежие залёты, не дожидаясь часового cron.
+    if (finished && run.kind !== "PROFILE") after(() => runAiPipelineOnce());
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Webhook Apify: не удалось забрать результат", error);

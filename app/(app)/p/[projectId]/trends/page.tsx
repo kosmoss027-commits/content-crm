@@ -46,7 +46,7 @@ export default async function TrendsPage({ params, searchParams }: PageProps<"/p
         reels={reels}
         anomalyThreshold={project.anomalyThreshold}
         canMark={can(ctx.role, "research.manage")}
-        empty="За это время аномальных залётов нет. Сбор идёт раз в 3 дня — свежие ролики можно подтянуть кнопкой «Собрать все сейчас» в Разведке."
+        empty="За это время аномальных залётов нет. Свежие ролики подтягиваются кнопкой «Собрать и разобрать всё» в Разведке → Аккаунты."
       />
     </>
   );

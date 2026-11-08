@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getProjectContext } from "@/lib/db/access";
 import { AppError } from "@/lib/db/errors";
 import { listRadar, listRunsForProject, listViralFeed, toggleReelMark } from "@/lib/db/reels";
-import { addAccounts, listWatchlist, removeEntry } from "@/lib/db/watchlist";
+import { addAccounts, listWatchlist, removeEntry, watchedForCollectAll } from "@/lib/db/watchlist";
 import { startCollection } from "@/lib/research/collect";
 import { isScheduledCollectionDue } from "@/lib/research/cron";
 import { syncPendingRuns } from "@/lib/research/ingest";
@@ -233,6 +233,19 @@ describe("разведка: сбор и лимиты", () => {
     const { provider, started } = fakeProvider({ reels: [], profiles: [], failures: [] });
     await startCollection({ kind: "MANUAL", usernames: ["alpha"] }, provider);
     expect(started[0].maxCostUsd).toBe(0.5);
+  });
+});
+
+describe("кнопка «Собрать и разобрать всё»", () => {
+  beforeEach(resetDatabase);
+
+  it("делит аккаунты проекта на новые и уже собранные, чужие проекты не трогает", async () => {
+    const { ctxA, ctxB } = await setup();
+    await addAccounts(ctxA, "alpha newbie", "CIS");
+    await addAccounts(ctxB, "beta", "CIS");
+    await prisma.scrapedAccount.update({ where: { username: "alpha" }, data: { lastScrapedAt: new Date() } });
+
+    expect(await watchedForCollectAll(ctxA)).toEqual({ fresh: ["newbie"], known: ["alpha"] });
   });
 });
 

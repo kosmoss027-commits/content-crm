@@ -8,7 +8,7 @@ import { formText, runAction, type ActionState } from "@/lib/actions";
 import { requireProjectContext } from "@/lib/auth/session";
 import { AppError } from "@/lib/db/errors";
 import { toggleReelMark } from "@/lib/db/reels";
-import { addAccounts, removeEntry, updateEntry, usernamesForManualCollect } from "@/lib/db/watchlist";
+import { addAccounts, removeEntry, updateEntry, usernamesForManualCollect, watchedForCollectAll } from "@/lib/db/watchlist";
 import { startCollection } from "@/lib/research/collect";
 import { syncPendingRuns } from "@/lib/research/ingest";
 import type { Market, WatchStatus } from "@/lib/generated/prisma/enums";
@@ -82,6 +82,31 @@ export async function collectNowAction(projectId: string, entryId?: string): Pro
   return result?.ok ? { ok: true, message } : result;
 }
 
+/**
+ * Одна кнопка «Собрать и разобрать»: ролики всех отслеживаемых аккаунтов + подписчики и аватары.
+ * Разбор новых залётов стартует сам, когда Apify вернёт данные (webhook), и сразу — для того, что уже в очереди.
+ */
+export async function collectEverythingAction(projectId: string): Promise<ActionState> {
+  let message = "";
+  const result = await runAction(async () => {
+    const ctx = await requireProjectContext(projectId);
+    const { fresh, known } = await watchedForCollectAll(ctx);
+    if (fresh.length + known.length === 0) throw new AppError("CONFLICT", "В проекте нет отслеживаемых аккаунтов.");
+    const scope = { workspaceId: ctx.workspaceId, projectId: ctx.projectId };
+    const outcomes = [
+      ...(known.length ? [await startCollection({ kind: "MANUAL", usernames: known, ...scope })] : []),
+      ...(fresh.length ? [await startCollection({ kind: "INITIAL", usernames: fresh, ...scope })] : []),
+      await startCollection({ kind: "PROFILE", usernames: [...known, ...fresh], ...scope }),
+    ];
+    const started = outcomes.filter((o) => o.status === "started");
+    if (started.length === 0) throw new AppError("CONFLICT", outcomes[0].message);
+    message = `Запущено: ролики ${known.length + fresh.length} акк. и подписчики. Через 5–15 минут появятся новые ролики, затем начнётся разбор залётов.`;
+  });
+  if (result?.ok) after(() => runAiPipelineOnce());
+  refresh(projectId);
+  return result?.ok ? { ok: true, message } : result;
+}
+
 export async function toggleMarkAction(projectId: string, reelId: string): Promise<ActionState> {
   let marked = false;
   const result = await runAction(async () => {
@@ -99,6 +124,9 @@ export async function toggleMarkAction(projectId: string, reelId: string): Promi
 export async function syncRunsAction(projectId: string): Promise<number> {
   await requireProjectContext(projectId);
   const finished = await syncPendingRuns();
-  if (finished > 0) refresh(projectId);
+  if (finished > 0) {
+    after(() => runAiPipelineOnce());
+    refresh(projectId);
+  }
   return finished;
 }

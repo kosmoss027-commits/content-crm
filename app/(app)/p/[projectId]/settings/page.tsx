@@ -71,6 +71,7 @@ export default async function SettingsPage({ params }: PageProps<"/p/[projectId]
           <ThresholdsForm projectId={projectId} viral={thresholds.viralThreshold} anomaly={thresholds.anomalyThreshold} />
           <ul className="grid gap-1 text-sm text-muted-foreground">
             <li>
+              {SCRAPE_SCHEDULE.enabled ? "" : "Плановый сбор выключен — ролики собираются по кнопке «Собрать и разобрать всё» в Разведке. Если включить: "}
               Плановый сбор: раз в {SCRAPE_SCHEDULE.everyDays} дн. в {String(SCRAPE_SCHEDULE.hour).padStart(2, "0")}:00
               ({SCRAPE_SCHEDULE.timeZone}), ролики за последние {SCRAPE_SCHEDULE.windowDays} дн.
             </li>

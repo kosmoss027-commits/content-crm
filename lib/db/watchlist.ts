@@ -119,3 +119,16 @@ export async function listProjectNiches(ctx: ProjectContext): Promise<string[]> 
   });
   return rows.map((r) => r.niche!).sort();
 }
+
+/** Все отслеживаемые аккаунты проекта для кнопки «Собрать и разобрать»: новые (ещё ни разу не собирались) отдельно. */
+export async function watchedForCollectAll(ctx: ProjectContext): Promise<{ fresh: string[]; known: string[] }> {
+  assertCan(ctx, "research.manage");
+  const entries = await prisma.watchlistEntry.findMany({
+    where: { projectId: ctx.projectId, status: "WATCHING" },
+    select: { account: { select: { username: true, lastScrapedAt: true } } },
+  });
+  return {
+    fresh: entries.filter((e) => e.account.lastScrapedAt === null).map((e) => e.account.username),
+    known: entries.filter((e) => e.account.lastScrapedAt !== null).map((e) => e.account.username),
+  };
+}

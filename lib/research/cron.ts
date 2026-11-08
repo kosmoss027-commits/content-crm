@@ -40,7 +40,7 @@ export async function runCron(now = new Date(), provider: ScraperProvider = scra
     orderBy: { startedAt: "desc" },
     select: { startedAt: true },
   });
-  if (isScheduledCollectionDue(now, lastScheduled?.startedAt ?? null)) {
+  if (SCRAPE_SCHEDULE.enabled && isScheduledCollectionDue(now, lastScheduled?.startedAt ?? null)) {
     const outcome = await startCollection({ kind: "SCHEDULED", usernames: await watchedUsernames() }, provider, now);
     report.scheduled = outcome.message;
   }
@@ -53,7 +53,7 @@ export async function runCron(now = new Date(), provider: ScraperProvider = scra
     select: { username: true },
   });
   const profileRunning = await prisma.scrapeRun.count({ where: { kind: "PROFILE", status: "RUNNING" } });
-  if (staleProfiles.length > 0 && profileRunning === 0) {
+  if (SCRAPE_SCHEDULE.enabled && staleProfiles.length > 0 && profileRunning === 0) {
     const outcome = await startCollection(
       { kind: "PROFILE", usernames: staleProfiles.map((a) => a.username) },
       provider,
