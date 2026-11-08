@@ -100,7 +100,11 @@ export async function syncRun(run: ScrapeRun, provider: ScraperProvider = scrape
   for (const username of run.usernames) {
     await prisma.scrapedAccount.updateMany({
       where: { username },
-      data: kind === "reels" ? { lastScrapedAt: now, lastError: failed.get(username) ?? null } : { lastError: failed.get(username) ?? undefined },
+      // Профиль помечаем проверенным даже при ошибке — иначе закрытые аккаунты перепроверялись бы каждый час
+      data:
+        kind === "reels"
+          ? { lastScrapedAt: now, lastError: failed.get(username) ?? null }
+          : { lastProfileAt: now, ...(failed.has(username) ? { lastError: failed.get(username) } : {}) },
     });
   }
   if (kind === "reels") {

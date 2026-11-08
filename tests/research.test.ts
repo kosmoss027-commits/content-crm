@@ -189,6 +189,17 @@ describe("разведка: сбор и лимиты", () => {
     expect((await prisma.scrapedReel.findMany()).map((r) => r.shortCode)).toEqual(["own"]);
   });
 
+  it("профиль, который не удалось получить, не перепроверяется каждый час", async () => {
+    await setup();
+    const { provider } = fakeProvider({ reels: [], profiles: [], failures: [{ username: "closed", reason: "Restricted profile" }] });
+    await prisma.scrapedAccount.create({ data: { username: "closed" } });
+    await startCollection({ kind: "PROFILE", usernames: ["closed"] }, provider);
+    await syncPendingRuns(provider);
+    const account = await prisma.scrapedAccount.findUniqueOrThrow({ where: { username: "closed" } });
+    expect(account.lastProfileAt).not.toBeNull();
+    expect(account.lastError).toBe("Restricted profile");
+  });
+
   it("повторный сбор обновляет просмотры, а не дублирует ролики", async () => {
     await setup();
     const first = fakeProvider({ reels: [reel("alpha", "r1", 100, 1)], profiles: [], failures: [] });
