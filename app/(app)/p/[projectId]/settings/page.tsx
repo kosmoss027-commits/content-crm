@@ -1,6 +1,8 @@
 import { SCRAPE_BUDGET, SCRAPE_SCHEDULE } from "@/config/scraping";
 import { can } from "@/lib/auth/permissions";
-import { requireProjectContext } from "@/lib/auth/session";
+import { requireProjectContext, requireUser } from "@/lib/auth/session";
+import { getServiceBalances, isPlatformAdmin } from "@/lib/billing/balances";
+import { BalancesPanel } from "@/components/billing/balances-panel";
 import { prisma } from "@/lib/db/prisma";
 import { listWorkspaceProjects } from "@/lib/db/projects";
 import { getWorkspaceUsage } from "@/lib/db/workspaces";
@@ -15,10 +17,13 @@ export default async function SettingsPage({ params }: PageProps<"/p/[projectId]
   const ctx = await requireProjectContext(projectId);
   if (!can(ctx.role, "settings.view")) return <NoAccess />;
 
-  const [projects, usage, thresholds] = await Promise.all([
+  const user = await requireUser();
+  const showBalances = isPlatformAdmin(user.email);
+  const [projects, usage, thresholds, balances] = await Promise.all([
     listWorkspaceProjects(ctx),
     getWorkspaceUsage(ctx),
     prisma.project.findUniqueOrThrow({ where: { id: ctx.projectId }, select: { viralThreshold: true, anomalyThreshold: true } }),
+    showBalances ? getServiceBalances() : null,
   ]);
 
   return (
@@ -82,9 +87,11 @@ export default async function SettingsPage({ params }: PageProps<"/p/[projectId]
           </ul>
         </SettingsBlock>
 
-        <SettingsBlock title="Ключи API">
-          <Upcoming stage={3} text="Apify подключён на сервере. Ключи Claude и распознавания речи понадобятся на этапе 3." />
-        </SettingsBlock>
+        {balances && (
+          <SettingsBlock title="Балансы и расходы" id="balances">
+            <BalancesPanel balances={balances} />
+          </SettingsBlock>
+        )}
 
         <SettingsBlock title="Шаблон сценария">
           <Upcoming stage={3} text="Ваш шаблон: хук → кадры → финал, с подсказками «что снимать»." />

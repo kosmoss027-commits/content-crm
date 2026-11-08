@@ -5,6 +5,9 @@ import { canOpenSection, sectionsForRole } from "@/lib/navigation";
 import { getSpendSummary } from "@/lib/research/budget";
 import { aiSpentThisMonth } from "@/lib/ai/usage";
 import { AI_LIMITS } from "@/config/ai";
+import { LOW_BALANCE_USD } from "@/config/billing";
+import { isPlatformAdmin, lowAiBalance } from "@/lib/billing/balances";
+import { LowBalanceBanner } from "@/components/billing/low-balance-banner";
 import { AppHeader } from "@/components/layout/app-header";
 import { RememberProject } from "@/components/layout/remember-project";
 import { Sidebar, type SidebarSection, type SidebarSpend } from "@/components/layout/sidebar";
@@ -13,10 +16,11 @@ export default async function ProjectLayout({ children, params }: LayoutProps<"/
   const { projectId } = await params;
   const [user, ctx] = await Promise.all([requireUser(), requireProjectContext(projectId)]);
   const showSpend = canOpenSection(ctx.role, "research");
-  const [projects, summary, aiMonthUsd] = await Promise.all([
+  const [projects, summary, aiMonthUsd, lowBalanceUsd] = await Promise.all([
     listAccessibleProjects(user.id),
     showSpend ? getSpendSummary() : null,
     showSpend ? aiSpentThisMonth() : 0,
+    isPlatformAdmin(user.email) ? lowAiBalance(LOW_BALANCE_USD) : null,
   ]);
   const spend: SidebarSpend | undefined = summary
     ? {
@@ -52,6 +56,7 @@ export default async function ProjectLayout({ children, params }: LayoutProps<"/
           canManageProjects={can(ctx.role, "project.manage")}
           user={{ name: user.name, email: user.email, avatarUrl: user.avatarUrl, roleLabel: ROLE_LABELS[ctx.role] }}
         />
+        {lowBalanceUsd !== null && <LowBalanceBanner remainingUsd={lowBalanceUsd} />}
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8">{children}</main>
       </div>
       <RememberProject projectId={projectId} />
