@@ -2,6 +2,7 @@
 import { claudeClient } from "@/lib/ai/claude";
 import { ffmpegMediaProcessor } from "@/lib/ai/media";
 import { openRouterClient } from "@/lib/ai/openrouter";
+import { scraper } from "@/scraper";
 import { runAiPipeline, type PipelineReport } from "@/lib/ai/pipeline";
 import type { AiServices, LlmClient } from "@/lib/ai/types";
 
@@ -22,7 +23,7 @@ let running: Promise<PipelineReport> | null = null;
 export function runAiPipelineOnce(): Promise<PipelineReport> | null {
   const llm = activeLlm();
   if (!llm) return null;
-  const services: AiServices = { llm, media: ffmpegMediaProcessor };
+  const services: AiServices = { llm, media: ffmpegMediaProcessor, scraper };
   running ??= runAiPipeline(services)
     .catch((error) => {
       console.error("Конвейер разбора упал:", error);

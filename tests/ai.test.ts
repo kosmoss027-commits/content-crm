@@ -136,6 +136,32 @@ describe("очередь разбора", () => {
     expect(calls).toEqual([]);
     expect(await prisma.reelAnalysis.count({ where: { status: "QUEUED" } })).toBe(2);
   });
+  it("перед разбором устаревшие ссылки на видео обновляются, неудачная попытка повторяется", async () => {
+    await setup();
+    await enqueueVirals();
+    await prisma.scrapedReel.updateMany({ data: { viewsUpdatedAt: new Date(Date.now() - 5 * DAY) } });
+    const viral1 = await prisma.scrapedReel.findFirstOrThrow({ where: { shortCode: "viral1" } });
+    await prisma.reelMedia.create({ data: { reelId: viral1.id, error: "Видео не скачалось (403)" } });
+    const requested: string[][] = [];
+    const scraper = {
+      async startReels() { return ""; },
+      async startProfiles() { return ""; },
+      async getRunState() { return { status: "succeeded" as const, costUsd: 0, error: null }; },
+      async getRunResult() { return { reels: [], profiles: [], failures: [] }; },
+      async fetchReelsByUrl(urls: string[]) {
+        requested.push(urls);
+        return [{ ...(await prisma.scrapedReel.findFirstOrThrow({ where: { shortCode: "viral1" } })), username: "alpha", hashtags: [], isPinned: false, fullName: null, musicTitle: null, musicArtist: null, videoUrl: "https://cdn/fresh.mp4" }];
+      },
+    };
+    const { services } = fakeServices(8);
+    await processQueue({ ...services, scraper });
+
+    expect(requested[0]?.length).toBe(2);
+    expect((await prisma.scrapedReel.findUniqueOrThrow({ where: { id: viral1.id } })).videoUrl).toBe("https://cdn/fresh.mp4");
+    const media = await prisma.reelMedia.findUniqueOrThrow({ where: { reelId: viral1.id } });
+    expect(media.error).toBeNull();
+    expect(media.frames).toHaveLength(1);
+  });
 });
 
 describe("сценарии", () => {

@@ -61,4 +61,6 @@ export interface ScraperProvider {
   startProfiles(request: ProfilesRequest): Promise<string>;
   getRunState(runId: string): Promise<RunState>;
   getRunResult(runId: string, kind: RunKind): Promise<RunResult>;
+  /** Свежие данные роликов по ссылкам (ссылки на видео Instagram живут несколько дней). Синхронно. */
+  fetchReelsByUrl(urls: string[], maxCostUsd: number): Promise<ScrapedReelData[]>;
 }

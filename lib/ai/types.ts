@@ -2,6 +2,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { z } from "zod";
 import type { AiUsageKind } from "@/lib/generated/prisma/enums";
+import type { ScraperProvider } from "@/scraper/types";
 
 export type LlmRequest<T> = {
   kind: AiUsageKind;
@@ -40,4 +41,5 @@ export interface MediaProcessor {
   process(videoUrl: string, durationSec: number | null): Promise<MediaResult>;
 }
 
-export type AiServices = { llm: LlmClient; media: MediaProcessor };
+/** scraper — чтобы перед разбором обновить устаревшие ссылки на видео (необязательно) */
+export type AiServices = { llm: LlmClient; media: MediaProcessor; scraper?: ScraperProvider };

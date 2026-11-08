@@ -2,16 +2,20 @@
 // Запускается из /api/cron раз в час; внешние сервисы приходят параметром (в тестах — поддельные).
 import type Anthropic from "@anthropic-ai/sdk";
 import { AI_LIMITS, AI_MODELS, DAILY_DRAFTS_HOUR } from "@/config/ai";
-import { SCRAPE_SCHEDULE } from "@/config/scraping";
+import { APIFY_PRICES, SCRAPE_SCHEDULE } from "@/config/scraping";
 import { prisma } from "@/lib/db/prisma";
 import { AppError } from "@/lib/db/errors";
 import { localHour } from "@/lib/research/cron";
+import { availableForRun } from "@/lib/research/budget";
 import { analysisSchema, analysisSystem, brandContext, relevanceSchema, relevanceSystem } from "@/lib/ai/prompts";
 import { generateScript } from "@/lib/ai/scripts";
 import type { AiServices } from "@/lib/ai/types";
 import { assertAiBudget, claudeCostUsd, recordUsage, transcriptCostUsd } from "@/lib/ai/usage";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** Ссылка Instagram на видео живёт несколько дней: старше — обновляем перед разбором */
+const STALE_VIDEO_MS = 2 * DAY_MS;
+const MIN_REFRESH_USD = 0.02;
 
 /** Начало текущих суток в часовом поясе расписания. */
 export function localDayStart(now: Date, timeZone = SCRAPE_SCHEDULE.timeZone): Date {
@@ -54,7 +58,9 @@ export async function enqueueVirals(now = new Date()): Promise<number> {
 /** Расшифровка и кадры: делаются один раз на ролик для всех проектов. */
 async function ensureMedia(reelId: string, services: AiServices) {
   const existing = await prisma.reelMedia.findUnique({ where: { reelId } });
-  if (existing) return existing;
+  if (existing && !existing.error) return existing;
+  // Прошлая попытка не удалась (например, устарела ссылка) — пробуем ещё раз
+  if (existing) await prisma.reelMedia.delete({ where: { id: existing.id } });
   const reel = await prisma.scrapedReel.findUniqueOrThrow({ where: { id: reelId }, select: { videoUrl: true, durationSec: true } });
   if (!reel.videoUrl) {
     return prisma.reelMedia.create({ data: { reelId, error: "Нет ссылки на видео — разбор только по подписи." } });
@@ -71,6 +77,37 @@ async function ensureMedia(reelId: string, services: AiServices) {
   }
 }
 
+/** Свежие ссылки на видео для роликов из очереди, у которых нет кадров, а данные старше 2 дней. */
+async function refreshStaleVideos(analysisIds: string[], services: AiServices, now: Date): Promise<void> {
+  if (!services.scraper || analysisIds.length === 0) return;
+  const reels = await prisma.scrapedReel.findMany({
+    where: {
+      analyses: { some: { id: { in: analysisIds } } },
+      viewsUpdatedAt: { lt: new Date(now.getTime() - STALE_VIDEO_MS) },
+      OR: [{ media: null }, { media: { error: { not: null } } }],
+    },
+    select: { url: true },
+  });
+  if (reels.length === 0) return;
+  const maxCostUsd = await availableForRun(now);
+  if (maxCostUsd < MIN_REFRESH_USD) return;
+  try {
+    const fresh = await services.scraper.fetchReelsByUrl(reels.map((r) => r.url), maxCostUsd);
+    for (const reel of fresh) {
+      await prisma.scrapedReel.updateMany({
+        where: { shortCode: reel.shortCode },
+        data: { videoUrl: reel.videoUrl, coverUrl: reel.coverUrl, viewsUpdatedAt: now },
+      });
+    }
+    const costUsd = Math.round((fresh.length * APIFY_PRICES.reel + 0.001) * 10000) / 10000;
+    await prisma.scrapeRun.create({
+      data: { kind: "MANUAL", status: "SUCCEEDED", usernames: [], itemsCount: fresh.length, estimatedUsd: costUsd, costUsd, finishedAt: now },
+    });
+  } catch (error) {
+    console.error("Не удалось обновить ссылки на видео:", error);
+  }
+}
+
 function reelText(reel: { caption: string | null; views: number; multiplier: number | null; durationSec: number | null; account: { username: string; medianViews: number | null } }, transcript: string | null): string {
   return [
     `Автор: @${reel.account.username}`,
@@ -79,6 +116,10 @@ function reelText(reel: { caption: string | null; views: number; multiplier: num
     `Подпись: ${reel.caption?.trim() || "(нет)"}`,
     `Расшифровка речи: ${transcript?.trim() || "(нет речи или не удалось распознать)"}`,
   ].join("\n");
+}
+
+function frameBlocks(frames: string[]): Anthropic.Beta.BetaContentBlockParam[] {
+  return frames.map((data) => ({ type: "image", source: { type: "base64", media_type: "image/jpeg", data } }));
 }
 
 /** Разбор одного ролика под проект. Лимит расходов — ошибка LIMIT, остальные ошибки — статус FAILED. */
@@ -104,7 +145,8 @@ export async function analyzeOne(analysisId: string, services: AiServices): Prom
         kind: "RELEVANCE",
         model: AI_MODELS.relevance,
         system: relevanceSystem(brand),
-        content: [{ type: "text", text }],
+        // Первые кадры — чтобы оценивать и ролики без речи и подписи
+        content: [...frameBlocks(media.frames.slice(0, 2)), { type: "text", text }],
         schema: relevanceSchema,
         effort: "low",
         maxTokens: 1024,
@@ -122,10 +164,7 @@ export async function analyzeOne(analysisId: string, services: AiServices): Prom
     }
 
     await assertAiBudget();
-    const images: Anthropic.Beta.BetaContentBlockParam[] = media.frames.map((data) => ({
-      type: "image",
-      source: { type: "base64", media_type: "image/jpeg", data },
-    }));
+    const images = frameBlocks(media.frames);
     const result = await services.llm.generate({
       kind: "ANALYSIS",
       model: AI_MODELS.analysis,
@@ -165,6 +204,8 @@ export async function processQueue(services: AiServices, now = new Date()): Prom
     take: capacity,
     select: { id: true },
   });
+  await refreshStaleVideos(queue.map((item) => item.id), services, now);
+
   let processed = 0;
   for (const item of queue) {
     try {

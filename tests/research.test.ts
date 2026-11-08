@@ -56,6 +56,9 @@ function fakeProvider(result: RunResult, costUsd = 0.1) {
     async getRunResult() {
       return result;
     },
+    async fetchReelsByUrl() {
+      return [];
+    },
   };
   return { provider, started };
 }

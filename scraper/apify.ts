@@ -1,6 +1,6 @@
 // Провайдер сбора через Apify (https://apify.com). Логинов Instagram не использует.
 import { normalizeProfilesRun, normalizeReelsRun } from "./normalize";
-import type { ProfilesRequest, ReelsRequest, RunKind, RunResult, RunState, ScraperProvider } from "./types";
+import type { ProfilesRequest, ReelsRequest, RunKind, RunResult, RunState, ScrapedReelData, ScraperProvider } from "./types";
 
 const API = "https://api.apify.com/v2";
 const ACTORS = {
@@ -74,6 +74,14 @@ export const apifyProvider: ScraperProvider = {
       costUsd: data.usageTotalUsd ?? 0,
       error: finished && data.status !== "SUCCEEDED" ? (data.statusMessage ?? data.status) : null,
     };
+  },
+
+  async fetchReelsByUrl(urls: string[], maxCostUsd: number): Promise<ScrapedReelData[]> {
+    const items = await apify<Record<string, unknown>[]>(
+      `/acts/${ACTORS.reels}/run-sync-get-dataset-items?maxTotalChargeUsd=${maxCostUsd.toFixed(2)}`,
+      { method: "POST", body: JSON.stringify({ username: urls, resultsLimit: 1 }) },
+    );
+    return normalizeReelsRun(items).reels;
   },
 
   async getRunResult(runId: string, kind: RunKind): Promise<RunResult> {
