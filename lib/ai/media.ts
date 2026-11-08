@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import ffmpegPath from "ffmpeg-static";
+import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import type { MediaProcessor, MediaResult } from "@/lib/ai/types";
 
 const run = promisify(execFile);
@@ -21,6 +21,7 @@ async function download(url: string): Promise<Buffer> {
 }
 
 async function extractFrames(videoPath: string, dir: string, durationSec: number): Promise<string[]> {
+  const ffmpegPath = ffmpegInstaller.path;
   if (!ffmpegPath) throw new Error("ffmpeg не найден на сервере.");
   const frames: string[] = [];
   for (const [index, position] of FRAME_POSITIONS.entries()) {
