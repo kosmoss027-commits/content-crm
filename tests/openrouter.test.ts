@@ -45,6 +45,12 @@ describe("OpenRouter", () => {
     expect(JSON.stringify(strictJsonSchema(analysisSchema))).not.toContain('"additionalProperties":true');
   });
 
+  it("поле с именем служебного слова (format) не теряется", () => {
+    const schema = strictJsonSchema(analysisSchema) as { required: string[]; properties: Record<string, unknown> };
+    expect(Object.keys(schema.properties).sort()).toEqual([...schema.required].sort());
+    expect(schema.properties).toHaveProperty("format");
+  });
+
   it("отправляет картинки и схему, проверяет ответ и берёт стоимость от OpenRouter", async () => {
     const { impl, calls } = fakeFetch(200, {
       choices: [{ message: { content: JSON.stringify({ score: 7, reason: "в тему" }) }, finish_reason: "stop" }],

@@ -14,12 +14,17 @@ export function openRouterModel(model: string): string {
 
 /** JSON-схема из Zod, пригодная для strict-режима: без лишних ограничений, без дополнительных полей. */
 export function strictJsonSchema(schema: z.ZodType): Record<string, unknown> {
+  // Внутри "properties" ключи — это имена полей (например, поле "format"), их не трогаем.
   const clean = (node: unknown): unknown => {
     if (Array.isArray(node)) return node.map(clean);
     if (!node || typeof node !== "object") return node;
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(node)) {
-      if (!UNSUPPORTED_KEYWORDS.has(key)) result[key] = clean(value);
+      if (key === "properties" && value && typeof value === "object") {
+        result[key] = Object.fromEntries(Object.entries(value).map(([name, field]) => [name, clean(field)]));
+      } else if (!UNSUPPORTED_KEYWORDS.has(key)) {
+        result[key] = clean(value);
+      }
     }
     if (result.type === "object") result.additionalProperties = false;
     return result;
