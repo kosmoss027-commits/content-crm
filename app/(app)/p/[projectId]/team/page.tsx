@@ -2,6 +2,7 @@ import { can, ROLE_LABELS } from "@/lib/auth/permissions";
 import { requireProjectContext } from "@/lib/auth/session";
 import { listPendingInvites } from "@/lib/db/invites";
 import { listMembers } from "@/lib/db/members";
+import { openTaskCounts } from "@/lib/db/tasks";
 import { siteUrl } from "@/lib/supabase/env";
 import { PageHeader } from "@/components/section-placeholder";
 import { InviteForm, InviteList, MemberList } from "@/components/team/team-client";
@@ -12,7 +13,7 @@ export default async function TeamPage({ params }: PageProps<"/p/[projectId]/tea
   const { projectId } = await params;
   const ctx = await requireProjectContext(projectId);
   const canManage = can(ctx.role, "member.manage");
-  const [members, invites] = await Promise.all([listMembers(ctx), canManage ? listPendingInvites(ctx) : []]);
+  const [members, invites, taskCounts] = await Promise.all([listMembers(ctx), canManage ? listPendingInvites(ctx) : [], openTaskCounts(ctx)]);
 
   return (
     <>
@@ -32,6 +33,7 @@ export default async function TeamPage({ params }: PageProps<"/p/[projectId]/tea
             name: m.user.name,
             email: m.user.email,
             avatarUrl: m.user.avatarUrl,
+            openTasks: taskCounts[m.user.id] ?? 0,
           }))}
         />
         {canManage && (

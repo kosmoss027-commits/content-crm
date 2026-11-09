@@ -8,6 +8,7 @@ import { listPlan, listPublications, monthSummary, projectLabels, type ListFilte
 import { cn } from "@/lib/utils";
 import { NoAccess, PageHeader } from "@/components/section-placeholder";
 import { getConnection } from "@/lib/instagram/sync";
+import { campaignOptions } from "@/lib/db/warmups";
 import { InstagramSyncButton } from "@/components/content/instagram-panel";
 import { NewPublicationButton, PlanBoard, PlanFilters, type BoardItem, type BoardView } from "@/components/content/plan-board";
 
@@ -55,12 +56,13 @@ export default async function ContentPlanPage({ params, searchParams }: PageProp
     return { day, inMonth: day.slice(0, 7) === anchor.slice(0, 7) };
   });
 
-  const [plan, list, summary, labels, instagram] = await Promise.all([
+  const [plan, list, summary, labels, instagram, campaigns] = await Promise.all([
     view === "list" ? null : listPlan(ctx, view === "week" ? days[0] : gridStart, view === "week" ? days[6] : gridEnd, filters),
     view === "list" ? listPublications(ctx, filters) : null,
     monthSummary(ctx, anchor),
     projectLabels(ctx),
     getConnection(ctx),
+    campaignOptions(ctx),
   ]);
 
   const step = (direction: 1 | -1) => (view === "month" ? addMonths(anchor, direction) : addDays(anchor, 7 * direction));
@@ -128,6 +130,7 @@ export default async function ContentPlanPage({ params, searchParams }: PageProp
         undated={(plan?.undated ?? []).map(toBoard)}
         canEdit={can(ctx.role, "content.manage")}
         openNewOnLoad={query.new === "1"}
+        campaigns={campaigns}
       />
     </>
   );

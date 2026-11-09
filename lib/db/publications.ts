@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import type { PublicationStatus, ScriptStatus } from "@/lib/generated/prisma/enums";
 import { REPEAT_AFTER_DAYS } from "@/config/content";
+import { MEANING_VALUES } from "@/config/warmups";
 import { prisma } from "@/lib/db/prisma";
 import { AppError, notFoundError } from "@/lib/db/errors";
 import { assertCan, type ProjectContext } from "@/lib/db/access";
@@ -37,6 +38,13 @@ export const publicationInput = z.object({
     .transform((v) => (v ? v : null)),
   labels: z.array(z.string().trim().min(1).max(30, "Метка — до 30 символов")).max(10, "Не больше 10 меток").default([]),
   referenceUrl: z.string().trim().max(500).nullable().default(null),
+  rubric: z.enum(["LIFE", "CASE", "EXPERT", "OFFER", "THOUGHTS", "STORIES"]).nullable().default(null),
+  meanings: z.array(z.string().refine((v) => MEANING_VALUES.includes(v), "Неизвестный смысл")).max(MEANING_VALUES.length).default([]),
+  campaignId: z
+    .string()
+    .nullable()
+    .default(null)
+    .transform((v) => (v ? v : null)),
   isStar: z.boolean().default(false),
   // Вносится вручную (и статистика, пока Instagram не подключён)
   views: count.default(null),
@@ -168,8 +176,16 @@ async function resolveReference(ctx: ProjectContext, url: string | null): Promis
   return reel.id;
 }
 
+async function resolveCampaign(ctx: ProjectContext, id: string | null): Promise<string | null> {
+  if (!id) return null;
+  const campaign = await prisma.warmupCampaign.findFirst({ where: { id, projectId: ctx.projectId }, select: { id: true } });
+  if (!campaign) throw notFoundError();
+  return campaign.id;
+}
+
 function toData(input: z.output<typeof publicationInput>, fromInstagram: boolean) {
-  const { referenceUrl, date, views, reach, likes, comments, saves, shares, ...rest } = input;
+  const { referenceUrl, campaignId, date, views, reach, likes, comments, saves, shares, ...rest } = input;
+  void campaignId;
   void referenceUrl;
   // Статистику из Instagram руками не перезаписываем
   const apiStats = fromInstagram ? {} : { views, reach, likes, comments, saves, shares };
@@ -179,9 +195,9 @@ function toData(input: z.output<typeof publicationInput>, fromInstagram: boolean
 export async function createPublication(ctx: ProjectContext, raw: PublicationInput) {
   assertCan(ctx, "content.manage");
   const input = parseInput(publicationInput, raw);
-  const referenceReelId = await resolveReference(ctx, input.referenceUrl);
+  const [referenceReelId, campaignId] = await Promise.all([resolveReference(ctx, input.referenceUrl), resolveCampaign(ctx, input.campaignId)]);
   return prisma.publication.create({
-    data: { ...toData(input, false), referenceReelId, workspaceId: ctx.workspaceId, projectId: ctx.projectId },
+    data: { ...toData(input, false), referenceReelId, campaignId, workspaceId: ctx.workspaceId, projectId: ctx.projectId },
     select: { id: true },
   });
 }
@@ -193,7 +209,8 @@ export async function updatePublication(ctx: ProjectContext, id: string, raw: Pu
   // Ссылка не менялась — оставляем референс как есть, даже если аккаунт уже убран из разведки
   const unchanged = own.referenceReelId !== null && input.referenceUrl === own.referenceReel?.url;
   const referenceReelId = unchanged ? own.referenceReelId : await resolveReference(ctx, input.referenceUrl);
-  await prisma.publication.update({ where: { id: own.id }, data: { ...toData(input, own.igMediaId !== null), referenceReelId } });
+  const campaignId = await resolveCampaign(ctx, input.campaignId);
+  await prisma.publication.update({ where: { id: own.id }, data: { ...toData(input, own.igMediaId !== null), referenceReelId, campaignId } });
 }
 
 /** Перетаскивание карточки: новый день (или null — в «Без даты») и, если указана, площадка. */
@@ -242,6 +259,9 @@ export async function repeatPublication(ctx: ProjectContext, id: string, today: 
       codeWord: source.codeWord,
       labels: source.labels,
       referenceReelId: source.referenceReelId,
+      rubric: source.rubric,
+      meanings: source.meanings,
+      campaignId: source.campaignId,
     },
     select: { id: true, date: true },
   });

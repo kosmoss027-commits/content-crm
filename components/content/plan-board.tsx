@@ -45,7 +45,9 @@ export function PlanBoard({
   undated,
   canEdit,
   openNewOnLoad = false,
+  campaigns = [],
 }: {
+  campaigns?: { id: string; name: string }[];
   projectId: string;
   /** Пришли по кнопке «+ Публикация» в шапке — сразу открыть форму */
   openNewOnLoad?: boolean;
@@ -253,6 +255,7 @@ export function PlanBoard({
           onOpenChange={(open) => !open && setDialog({ open: false })}
           publication={dialog.publication}
           initial={emptyDraft(dialog.day, dialog.platform)}
+          campaigns={campaigns}
         />
       )}
 

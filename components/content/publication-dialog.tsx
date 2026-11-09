@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { CopyIcon, ExternalLinkIcon, StarIcon, Trash2Icon } from "lucide-react";
 import { PLATFORMS, PUBLICATION_STATUSES, PUBLICATION_TYPES } from "@/config/content";
+import { MEANINGS, RUBRICS } from "@/config/warmups";
 import type { ActionState } from "@/lib/actions";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,9 @@ export function emptyDraft(date: string | null, platform: Draft["platform"] = "I
     labels: [],
     isStar: false,
     referenceUrl: null,
+    rubric: null,
+    meanings: [],
+    campaignId: null,
     views: null,
     reach: null,
     likes: null,
@@ -104,7 +108,10 @@ export function PublicationDialog({
   onOpenChange,
   publication,
   initial,
+  campaigns = [],
 }: {
+  /** Кампании прогрева проекта для привязки */
+  campaigns?: { id: string; name: string }[];
   projectId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -190,6 +197,46 @@ export function PublicationDialog({
               <Input value={labelsText} onChange={(e) => setLabelsText(e.target.value)} placeholder="рубрика, серия" />
             </label>
           </div>
+
+          <fieldset className="grid gap-2 rounded-lg border p-3">
+            <legend className="px-1 text-sm font-medium">Прогрев</legend>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1.5 text-sm">
+                <span className="font-medium">Рубрика</span>
+                <select className={cn(fieldClass, "h-9 py-1")} value={draft.rubric ?? ""} onChange={(e) => set("rubric", (e.target.value || null) as Draft["rubric"])}>
+                  <option value="">—</option>
+                  {RUBRICS.map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                <span className="font-medium">Кампания прогрева</span>
+                <select className={cn(fieldClass, "h-9 py-1")} value={draft.campaignId ?? ""} onChange={(e) => set("campaignId", e.target.value || null)}>
+                  <option value="">—</option>
+                  {campaigns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm" role="group" aria-label="Смыслы прогрева">
+              {MEANINGS.map((m) => (
+                <label key={m.value} className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={draft.meanings.includes(m.value)}
+                    onChange={(e) => set("meanings", e.target.checked ? [...draft.meanings, m.value] : draft.meanings.filter((v) => v !== m.value))}
+                  />
+                  {m.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
 
           <label className="grid gap-1.5 text-sm">
             <span className="flex items-center gap-2 font-medium">

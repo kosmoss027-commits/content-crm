@@ -8,6 +8,9 @@ import { NoAccess, PageHeader } from "@/components/section-placeholder";
 import { ScriptList } from "@/components/factory/script-list";
 import { SCRIPT_STATUS_LABELS } from "@/components/factory/script-card";
 import { IdeaScriptForm } from "@/components/factory/factory-buttons";
+import { todayDay } from "@/lib/content/dates";
+import { myUpcomingTasks, taskFormOptions, toTaskItem } from "@/lib/db/tasks";
+import { TaskCreateButton, TaskItem } from "@/components/work/task-forms";
 
 export const metadata = { title: "Сегодня — Content CRM" };
 
@@ -16,11 +19,14 @@ export default async function TodayPage({ params }: PageProps<"/p/[projectId]/to
   const ctx = await requireProjectContext(projectId);
   if (!canOpenSection(ctx.role, "today")) return <NoAccess />;
 
-  const [counts, review, inProgress, queue] = await Promise.all([
+  const today = todayDay();
+  const [counts, review, inProgress, queue, myTasks, taskOptions] = await Promise.all([
     scriptCounts(ctx),
     listScripts(ctx, "REVIEW"),
     Promise.all((["SHOOT", "EDIT", "PUBLISH"] as const).map((s) => listScripts(ctx, s))).then((lists) => lists.flat()),
     analysisCounts(ctx),
+    myUpcomingTasks(ctx, today),
+    taskFormOptions(ctx),
   ]);
   const canEdit = can(ctx.role, "research.manage");
 
@@ -58,9 +64,22 @@ export default async function TodayPage({ params }: PageProps<"/p/[projectId]/to
             </section>
           )}
         </div>
-        <aside className="grid content-start gap-2 rounded-xl border p-4 text-sm">
-          <h2 className="font-medium">Мои задачи</h2>
-          <p className="text-muted-foreground">Просроченные, на сегодня и на завтра появятся здесь вместе с разделом «Задачи» (этап 6).</p>
+        <aside className="grid content-start gap-2 rounded-xl border p-3 text-sm">
+          <div className="flex items-center justify-between gap-2">
+            <Link href={`/p/${projectId}/tasks`} className="font-medium hover:underline">
+              Мои задачи
+            </Link>
+            <TaskCreateButton projectId={projectId} {...taskOptions} defaultAssigneeId={ctx.userId} today={today} />
+          </div>
+          {myTasks.length === 0 ? (
+            <p className="text-muted-foreground">Просроченных и на сегодня-завтра нет.</p>
+          ) : (
+            <ul className="grid gap-1.5">
+              {myTasks.map((t) => (
+                <TaskItem key={t.id} projectId={projectId} task={toTaskItem(t, today, projectId)} {...taskOptions} compact />
+              ))}
+            </ul>
+          )}
         </aside>
       </div>
     </>

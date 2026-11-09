@@ -20,7 +20,7 @@ import {
   revokeInviteAction,
 } from "@/app/(app)/p/[projectId]/team/actions";
 
-type Member = { id: string; userId: string; role: Role; name: string | null; email: string; avatarUrl: string | null };
+type Member = { id: string; userId: string; role: Role; name: string | null; email: string; avatarUrl: string | null; openTasks?: number };
 type PendingInvite = { id: string; email: string; roleLabel: string; link: string; expiresAt: string };
 
 function RoleSelect({
@@ -90,7 +90,10 @@ export function MemberList({
                         {member.name ?? member.email}
                         {member.userId === currentUserId && <span className="text-muted-foreground"> (вы)</span>}
                       </span>
-                      <span className="truncate text-xs text-muted-foreground">{member.email}</span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {member.email}
+                        {member.openTasks ? ` · открытых задач: ${member.openTasks}` : ""}
+                      </span>
                     </div>
                   </div>
                 </TableCell>

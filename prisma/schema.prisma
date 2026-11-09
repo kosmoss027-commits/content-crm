@@ -20,13 +20,15 @@ enum Role {
 
 /// Пользователь сервиса. id совпадает с id пользователя в Supabase Auth.
 model User {
-  id          String       @id @db.Uuid
-  email       String       @unique
-  name        String?
-  avatarUrl   String?
-  createdAt   DateTime     @default(now())
-  memberships Membership[]
-  invitesSent Invite[]     @relation("InvitedBy")
+  id            String       @id @db.Uuid
+  email         String       @unique
+  name          String?
+  avatarUrl     String?
+  createdAt     DateTime     @default(now())
+  memberships   Membership[]
+  invitesSent   Invite[]     @relation("InvitedBy")
+  tasksAssigned Task[]       @relation("TaskAssignee")
+  tasksCreated  Task[]       @relation("TaskCreator")
 }
 
 /// Рабочее пространство. У каждого клиента сервиса своё.
@@ -73,16 +75,16 @@ model Invite {
 
 /// Проект: «Мой блог», «Клиент: автоподбор»…
 model Project {
-  id               String           @id @default(cuid())
+  id               String               @id @default(cuid())
   workspaceId      String
   name             String
-  color            String           @default("#6366f1")
+  color            String               @default("#6366f1")
   archivedAt       DateTime?
-  createdAt        DateTime         @default(now())
+  createdAt        DateTime             @default(now())
   /// Порог «залёта» и «аномального залёта»: просмотры / медиана аккаунта
-  viralThreshold   Float            @default(3)
-  anomalyThreshold Float            @default(10)
-  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  viralThreshold   Float                @default(3)
+  anomalyThreshold Float                @default(10)
+  workspace        Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   watchlist        WatchlistEntry[]
   reelMarks        ReelMark[]
   brandMap         BrandMap?
@@ -97,6 +99,9 @@ model Project {
   clients          Client[]
   payments         Payment[]
   mentions         KeywordMention[]
+  warmups          WarmupCampaign[]
+  warmupDays       WarmupDay[]
+  tasks            Task[]
 
   @@index([workspaceId])
 }
@@ -177,6 +182,7 @@ model ScrapedReel {
   analyses       ReelAnalysis[]
   hypotheses     HypothesisReel[]
   publications   Publication[]
+  tasks          Task[]
 
   @@index([accountId, postedAt])
   @@index([postedAt])
@@ -494,6 +500,13 @@ model Publication {
   script          Script?           @relation(fields: [scriptId], references: [id], onDelete: SetNull)
   leads           Lead[]
   mentions        KeywordMention[]
+  // Прогрев (этап 6)
+  campaignId      String?
+  rubric          Rubric?
+  /// Смыслы прогрева: ключи из config/warmups.ts
+  meanings        String[]
+  campaign        WarmupCampaign?   @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  tasks           Task[]
 
   @@unique([projectId, igMediaId])
   @@index([projectId, date])
@@ -615,6 +628,7 @@ model Client {
   keyword     Keyword?    @relation(fields: [keywordId], references: [id], onDelete: SetNull)
   leads       Lead[]
   payments    Payment[]
+  tasks       Task[]
 
   @@index([projectId])
 }
@@ -634,4 +648,93 @@ model Payment {
   client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([projectId, paidAt])
+}
+
+// ─── Прогревы и задачи (этап 6) ─────────────────────────────
+
+enum Rubric {
+  LIFE // лайф
+  CASE // кейс
+  EXPERT // экспертный
+  OFFER // оффер
+  THOUGHTS // мысли
+  STORIES // сторис
+}
+
+enum WarmupDayKind {
+  START // старт прогрева
+  LIVE // эфир
+  IMPORTANT // важный день
+  OPEN_DAY // день открытых дверей
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+/// Кампания прогрева: период, продукт, старт продаж.
+model WarmupCampaign {
+  id             String        @id @default(cuid())
+  workspaceId    String
+  projectId      String
+  name           String
+  product        String        @default("")
+  startDate      DateTime      @db.Date
+  endDate        DateTime      @db.Date
+  salesStartDate DateTime?     @db.Date
+  note           String        @default("")
+  createdAt      DateTime      @default(now())
+  project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  days           WarmupDay[]
+  publications   Publication[]
+
+  @@index([projectId, startDate])
+}
+
+/// День кампании: тип, значение дня, пост в Telegram, сторис, смыслы.
+model WarmupDay {
+  id           String         @id @default(cuid())
+  workspaceId  String
+  projectId    String
+  campaignId   String
+  date         DateTime       @db.Date
+  kind         WarmupDayKind?
+  meaning      String         @default("")
+  telegramPost String         @default("")
+  stories      String         @default("")
+  meanings     String[]
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  campaign     WarmupCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, date])
+}
+
+/// Задача проекта: дедлайн, исполнитель, привязка к публикации, клиенту или ролику из разведки.
+model Task {
+  id            String       @id @default(cuid())
+  workspaceId   String
+  projectId     String
+  title         String
+  note          String       @default("")
+  status        TaskStatus   @default(TODO)
+  dueDate       DateTime?    @db.Date
+  assigneeId    String?      @db.Uuid
+  createdById   String       @db.Uuid
+  publicationId String?
+  clientId      String?
+  reelId        String?
+  doneAt        DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  project       Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee      User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy     User         @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  publication   Publication? @relation(fields: [publicationId], references: [id], onDelete: SetNull)
+  client        Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  reel          ScrapedReel? @relation(fields: [reelId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status, dueDate])
+  @@index([assigneeId, status])
 }
