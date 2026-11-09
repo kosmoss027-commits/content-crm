@@ -28,6 +28,7 @@ export type BoardItem = {
 export type BoardView = "week" | "month" | "list";
 
 const TYPE_COLOR = Object.fromEntries(PUBLICATION_TYPES.map((t) => [t.value, t.color])) as Record<PublicationType, string>;
+const TYPE_DOT = Object.fromEntries(PUBLICATION_TYPES.map((t) => [t.value, t.dot])) as Record<PublicationType, string>;
 const TYPE_LABEL = Object.fromEntries(PUBLICATION_TYPES.map((t) => [t.value, t.label])) as Record<PublicationType, string>;
 const STATUS_LABEL = Object.fromEntries(PUBLICATION_STATUSES.map((s) => [s.value, s.label])) as Record<PublicationStatus, string>;
 const PLATFORM_LABEL = Object.fromEntries(PLATFORMS.map((p) => [p.value, p.label])) as Record<Platform, string>;
@@ -359,7 +360,7 @@ function PlanCard({
       onClick={onOpen}
       title={`${item.title} — ${TYPE_LABEL[item.type]}, ${STATUS_LABEL[item.status]}`}
       className={cn(
-        "grid w-full gap-0.5 rounded-md border border-l-4 px-2 py-1 text-left text-xs shadow-xs transition-opacity hover:ring-2 hover:ring-ring/30",
+        "grid w-full gap-0.5 rounded-md border px-2 py-1 text-left text-xs shadow-xs transition-opacity hover:ring-2 hover:ring-ring/30",
         TYPE_COLOR[item.type],
         draggable && "cursor-grab active:cursor-grabbing",
         dragging && "opacity-40",
@@ -367,6 +368,7 @@ function PlanCard({
       )}
     >
       <span className="flex items-start gap-1 font-medium">
+        <span className={cn("mt-1 size-2 shrink-0 rounded-full", TYPE_DOT[item.type])} aria-hidden />
         {item.isStar && <StarIcon className="mt-0.5 size-3 shrink-0 fill-amber-400 text-amber-500" aria-label="Удачная" />}
         <span className={cn(compact && "line-clamp-2")}>{item.title}</span>
       </span>

@@ -12,13 +12,13 @@ export const PLATFORMS: { value: Platform; label: string }[] = [
   { value: "YOUTUBE", label: "YouTube" },
 ];
 
-/** Цвет карточки по типу: фон и полоска слева (классы Tailwind) */
-export const PUBLICATION_TYPES: { value: PublicationType; label: string; color: string }[] = [
-  { value: "SALES", label: "Продающий / прогрев", color: "border-l-rose-500 bg-rose-50 dark:bg-rose-950/40" },
-  { value: "ENGAGING", label: "Вовлекающий / лайф", color: "border-l-amber-500 bg-amber-50 dark:bg-amber-950/40" },
-  { value: "EXPERT", label: "Экспертный", color: "border-l-sky-500 bg-sky-50 dark:bg-sky-950/40" },
-  { value: "CASE", label: "Кейс / отзыв", color: "border-l-emerald-500 bg-emerald-50 dark:bg-emerald-950/40" },
-  { value: "ANNOUNCE", label: "Анонс / эфир", color: "border-l-violet-500 bg-violet-50 dark:bg-violet-950/40" },
+/** Цвет карточки по типу: лёгкий фон и точка-метка (классы Tailwind) */
+export const PUBLICATION_TYPES: { value: PublicationType; label: string; color: string; dot: string }[] = [
+  { value: "SALES", label: "Продающий / прогрев", color: "bg-rose-50 dark:bg-rose-950/40", dot: "bg-rose-500" },
+  { value: "ENGAGING", label: "Вовлекающий / лайф", color: "bg-amber-50 dark:bg-amber-950/40", dot: "bg-amber-500" },
+  { value: "EXPERT", label: "Экспертный", color: "bg-sky-50 dark:bg-sky-950/40", dot: "bg-sky-500" },
+  { value: "CASE", label: "Кейс / отзыв", color: "bg-emerald-50 dark:bg-emerald-950/40", dot: "bg-emerald-500" },
+  { value: "ANNOUNCE", label: "Анонс / эфир", color: "bg-violet-50 dark:bg-violet-950/40", dot: "bg-violet-500" },
 ];
 
 export const PUBLICATION_STATUSES: { value: PublicationStatus; label: string }[] = [
