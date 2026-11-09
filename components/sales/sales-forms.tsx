@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { notify } from "@/components/forms";
+import { LEAD_SOURCES, LEAD_STATUSES } from "@/config/sales";
 import {
   addPaymentAction,
   convertLeadAction,
@@ -22,19 +23,6 @@ import {
   updateLeadAction,
 } from "@/app/(app)/p/[projectId]/sales-actions";
 
-export const LEAD_SOURCES = [
-  { value: "COMMENT", label: "Комментарий" },
-  { value: "DIRECT", label: "Директ" },
-  { value: "TELEGRAM", label: "Telegram" },
-  { value: "OTHER", label: "Другое" },
-] as const;
-
-export const LEAD_STATUSES = [
-  { value: "NEW", label: "Новая" },
-  { value: "IN_PROGRESS", label: "В работе" },
-  { value: "CLIENT", label: "Клиент" },
-  { value: "LOST", label: "Отказ" },
-] as const;
 
 type Source = (typeof LEAD_SOURCES)[number]["value"];
 type Option = { id: string; label: string };

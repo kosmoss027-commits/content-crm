@@ -4,14 +4,14 @@ import { can } from "@/lib/auth/permissions";
 import { canOpenSection } from "@/lib/navigation";
 import { dateToDay, shortDay, todayDay } from "@/lib/content/dates";
 import { leadCounts, listKeywords, listLeads, publicationOptions } from "@/lib/db/sales";
-import { formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { NoAccess, PageHeader } from "@/components/section-placeholder";
-import { LEAD_SOURCES, LEAD_STATUSES, LeadActions, LeadCreateButton } from "@/components/sales/sales-forms";
+import { LEAD_STATUSES, SOURCE_LABEL } from "@/config/sales";
+import { LeadActions, LeadCreateButton } from "@/components/sales/sales-forms";
 
 export const metadata = { title: "Заявки — Content CRM" };
 
-const SOURCE_LABEL = Object.fromEntries(LEAD_SOURCES.map((s) => [s.value, s.label]));
 
 export default async function LeadsPage({ params, searchParams }: PageProps<"/p/[projectId]/leads">) {
   const { projectId } = await params;
@@ -88,7 +88,7 @@ export default async function LeadsPage({ params, searchParams }: PageProps<"/p/
                   <td className="p-2 font-semibold tracking-wide">{lead.keyword?.word ?? "—"}</td>
                   <td className="p-2">{SOURCE_LABEL[lead.source]}</td>
                   <td className="max-w-56 p-2 text-xs">{lead.publication?.title ?? "—"}</td>
-                  <td className="p-2 whitespace-nowrap text-xs text-muted-foreground">{formatDateTime(lead.firstTouchAt)}</td>
+                  <td className="p-2 whitespace-nowrap text-xs text-muted-foreground">{lead.source === "COMMENT" ? formatDateTime(lead.firstTouchAt) : formatDate(lead.firstTouchAt)}</td>
                   {canEdit && (
                     <td className="p-2">
                       <LeadActions projectId={projectId} lead={{ id: lead.id, status: lead.status, clientId: lead.client?.id ?? null }} />

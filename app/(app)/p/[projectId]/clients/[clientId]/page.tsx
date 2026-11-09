@@ -5,13 +5,13 @@ import { can } from "@/lib/auth/permissions";
 import { canOpenSection } from "@/lib/navigation";
 import { dateToDay, shortDay, todayDay } from "@/lib/content/dates";
 import { getClient, listKeywords } from "@/lib/db/sales";
-import { formatDateTime, formatRub } from "@/lib/format";
+import { formatDate, formatDateTime, formatRub } from "@/lib/format";
 import { NoAccess, PageHeader } from "@/components/section-placeholder";
-import { ClientForm, DeleteClientButton, DeletePaymentButton, LEAD_SOURCES, PaymentForm } from "@/components/sales/sales-forms";
+import { SOURCE_LABEL } from "@/config/sales";
+import { ClientForm, DeleteClientButton, DeletePaymentButton, PaymentForm } from "@/components/sales/sales-forms";
 
 export const metadata = { title: "Клиент — Content CRM" };
 
-const SOURCE_LABEL = Object.fromEntries(LEAD_SOURCES.map((s) => [s.value, s.label]));
 
 export default async function ClientPage({ params }: PageProps<"/p/[projectId]/clients/[clientId]">) {
   const { projectId, clientId } = await params;
@@ -26,10 +26,11 @@ export default async function ClientPage({ params }: PageProps<"/p/[projectId]/c
   const history = [
     ...client.leads.map((lead) => ({
       at: lead.firstTouchAt,
+      dateOnly: lead.source !== "COMMENT",
       text: `Заявка: ${SOURCE_LABEL[lead.source].toLowerCase()}${lead.keyword ? `, слово ${lead.keyword.word}` : ""}${lead.publication ? `, пост «${lead.publication.title}»` : ""}`,
     })),
-    { at: client.createdAt, text: "Стал клиентом" },
-    ...client.payments.map((p) => ({ at: p.paidAt, text: `Оплата ${formatRub(p.amountRub)}${p.product ? ` — ${p.product}` : ""}` })),
+    { at: client.createdAt, dateOnly: false, text: "Стал клиентом" },
+    ...client.payments.map((p) => ({ at: p.paidAt, dateOnly: true, text: `Оплата ${formatRub(p.amountRub)}${p.product ? ` — ${p.product}` : ""}` })),
   ].sort((a, b) => a.at.getTime() - b.at.getTime());
 
   return (
@@ -95,7 +96,7 @@ export default async function ClientPage({ params }: PageProps<"/p/[projectId]/c
               <li key={i} className="relative">
                 <span className="absolute top-1.5 -left-[1.3rem] size-2 rounded-full bg-foreground/40" aria-hidden />
                 <p>{event.text}</p>
-                <p className="text-xs text-muted-foreground">{formatDateTime(event.at)}</p>
+                <p className="text-xs text-muted-foreground">{event.dateOnly ? formatDate(event.at) : formatDateTime(event.at)}</p>
               </li>
             ))}
           </ol>

@@ -6,11 +6,11 @@ import { dateToDay, shortDay } from "@/lib/content/dates";
 import { listClients, listKeywords } from "@/lib/db/sales";
 import { formatRub } from "@/lib/format";
 import { NoAccess, PageHeader } from "@/components/section-placeholder";
-import { ClientCreateButton, LEAD_SOURCES } from "@/components/sales/sales-forms";
+import { SOURCE_LABEL } from "@/config/sales";
+import { ClientCreateButton } from "@/components/sales/sales-forms";
 
 export const metadata = { title: "Клиенты — Content CRM" };
 
-const SOURCE_LABEL = Object.fromEntries(LEAD_SOURCES.map((s) => [s.value, s.label]));
 
 export default async function ClientsPage({ params }: PageProps<"/p/[projectId]/clients">) {
   const { projectId } = await params;
