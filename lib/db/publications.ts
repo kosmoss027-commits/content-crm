@@ -145,7 +145,10 @@ export async function getPublication(ctx: ProjectContext, id: string) {
 export type PublicationDetails = Awaited<ReturnType<typeof getPublication>>;
 
 async function findOwn(ctx: ProjectContext, id: string) {
-  const row = await prisma.publication.findFirst({ where: { id, projectId: ctx.projectId }, select: { id: true, igMediaId: true } });
+  const row = await prisma.publication.findFirst({
+    where: { id, projectId: ctx.projectId },
+    select: { id: true, igMediaId: true, referenceReelId: true, referenceReel: { select: { url: true } } },
+  });
   if (!row) throw notFoundError();
   return row;
 }
@@ -187,7 +190,9 @@ export async function updatePublication(ctx: ProjectContext, id: string, raw: Pu
   assertCan(ctx, "content.manage");
   const input = parseInput(publicationInput, raw);
   const own = await findOwn(ctx, id);
-  const referenceReelId = await resolveReference(ctx, input.referenceUrl);
+  // Ссылка не менялась — оставляем референс как есть, даже если аккаунт уже убран из разведки
+  const unchanged = own.referenceReelId !== null && input.referenceUrl === own.referenceReel?.url;
+  const referenceReelId = unchanged ? own.referenceReelId : await resolveReference(ctx, input.referenceUrl);
   await prisma.publication.update({ where: { id: own.id }, data: { ...toData(input, own.igMediaId !== null), referenceReelId } });
 }
 
@@ -272,11 +277,12 @@ export async function publishedRows(ctx: ProjectContext, range: { from: string; 
       status: "PUBLISHED",
       date: range ? { gte: dayToDate(range.from), lte: dayToDate(range.to) } : { not: null },
     },
-    orderBy: { date: "asc" },
+    // Берём самые свежие 2000 и разворачиваем по возрастанию даты для графика
+    orderBy: { date: "desc" },
     take: 2000,
     select: statSelect,
   });
-  return rows.map(({ date, ...row }) => ({ ...row, day: dateToDay(date!) }));
+  return rows.reverse().map(({ date, ...row }) => ({ ...row, day: dateToDay(date!) }));
 }
 
 const SCRIPT_TO_PUBLICATION: Record<ScriptStatus, PublicationStatus> = {

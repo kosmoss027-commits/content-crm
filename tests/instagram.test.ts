@@ -126,6 +126,7 @@ describe("Instagram: подключение и обновление", () => {
     await saveConnection(ctxA, { accessToken: "t", expiresAt: new Date(NOW.getTime() + 50 * DAY) }, { igUserId: "1", username: "amin" });
     const planned = await createPublication(ctxA, { title: "Мой план", platform: "INSTAGRAM", type: "CASE", status: "EDIT", date: "2026-11-05" });
     const foreign = await createPublication(ctxB, { title: "Чужой план", platform: "INSTAGRAM", type: "CASE", status: "EDIT", date: "2026-11-06" });
+    const idea = await createPublication(ctxA, { title: "Просто идея", platform: "INSTAGRAM", type: "CASE", status: "IDEA", date: "2026-11-06" });
 
     const items = [media("m1", "2026-11-05T15:00:00Z"), media("m2", "2026-11-06T04:00:00Z"), media("broken", "2026-11-07T04:00:00Z")];
     const { client } = fakeClient(items, { m1: { views: 1500, reach: 1100, ig_reels_avg_watch_time: 6400 } });
@@ -136,6 +137,7 @@ describe("Instagram: подключение и обновление", () => {
     const created = await prisma.publication.findFirstOrThrow({ where: { igMediaId: "m2" } });
     expect(created).toMatchObject({ projectId: ctxA.projectId, title: "Ролик m2", status: "PUBLISHED", date: new Date("2026-11-06T00:00:00Z") });
     expect(await prisma.publication.findUniqueOrThrow({ where: { id: foreign.id } })).toMatchObject({ igMediaId: null, status: "EDIT" });
+    expect(await prisma.publication.findUniqueOrThrow({ where: { id: idea.id } })).toMatchObject({ igMediaId: null, status: "IDEA" });
 
     // Второй раз Instagram не отдал статистику (задержка) — цифры остаются прежними
     const again = fakeClient(items, {});

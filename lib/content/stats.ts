@@ -190,8 +190,8 @@ function csvCell(value: string | number | null): string {
   if (value === null) return "";
   const text = String(value);
   // Защита от формул в Excel и экранирование кавычек
-  const safe = /^[=+\-@]/.test(text) ? `'${text}` : text;
-  return /[";\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+  const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+  return /[";\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 /** CSV для Excel: разделитель «;», BOM для кириллицы. */

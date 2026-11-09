@@ -63,10 +63,11 @@ async function upsertMedia(connection: { projectId: string; workspaceId: string 
     await prisma.publication.update({ where: { id: existing.id }, data: { ...igFields, ...stats } });
     return "updated";
   }
-  // Карточка, запланированная на этот день в Instagram, сама связывается с вышедшей публикацией
+  // Карточка, запланированная на этот день в Instagram, сама связывается с вышедшей публикацией.
+  // Идеи не трогаем; из остальных берём самую готовую (Опубликовано → Готово → Монтаж → …).
   const planned = await prisma.publication.findFirst({
-    where: { projectId: connection.projectId, igMediaId: null, platform: "INSTAGRAM", date: dayToDate(day) },
-    orderBy: { createdAt: "asc" },
+    where: { projectId: connection.projectId, igMediaId: null, platform: "INSTAGRAM", date: dayToDate(day), status: { not: "IDEA" } },
+    orderBy: [{ status: "desc" }, { createdAt: "asc" }],
     select: { id: true },
   });
   if (planned) {
@@ -106,6 +107,7 @@ export async function syncInstagram(projectId: string, client: InstagramClient, 
     const media = await client.listMedia(accessToken, INSTAGRAM_SYNC.mediaLimit);
     const report: SyncReport = { media: media.length, created: 0, linked: 0, updated: 0, insightErrors: 0 };
     for (const item of media) {
+      if (Number.isNaN(item.timestamp.getTime())) continue; // без даты публикацию не разместить в плане
       let insights: IgInsights = {};
       try {
         insights = await client.insights(accessToken, item);
@@ -114,7 +116,12 @@ export async function syncInstagram(projectId: string, client: InstagramClient, 
         report.insightErrors += 1;
         console.error(`Instagram: нет статистики для ${item.id}:`, error instanceof Error ? error.message : error);
       }
-      report[await upsertMedia(connection, item, insights, now)] += 1;
+      try {
+        report[await upsertMedia(connection, item, insights, now)] += 1;
+      } catch (error) {
+        // Например, параллельное обновление (ручное + cron) уже создало эту публикацию — остальные не страдают
+        console.error(`Instagram: не удалось сохранить ${item.id}:`, error instanceof Error ? error.message : error);
+      }
     }
     await prisma.instagramConnection.update({ where: { id: connection.id }, data: { lastSyncAt: now, lastError: null } });
     return report;
@@ -124,7 +131,8 @@ export async function syncInstagram(projectId: string, client: InstagramClient, 
         ? "Доступ к Instagram истёк или отозван — подключите заново в Настройках."
         : "Не удалось обновить данные из Instagram. Попробуйте позже.";
     console.error("Instagram: ошибка обновления", error instanceof Error ? error.message : error);
-    await prisma.instagramConnection.update({ where: { id: connection.id }, data: { lastError: message } });
+    // lastSyncAt ставим и при ошибке: иначе cron повторял бы запрос каждый час, а не раз в сутки
+    await prisma.instagramConnection.update({ where: { id: connection.id }, data: { lastError: message, lastSyncAt: now } });
     return { error: message };
   }
 }
@@ -135,6 +143,12 @@ export async function syncDueInstagram(client: InstagramClient, now = new Date()
     where: { OR: [{ lastSyncAt: null }, { lastSyncAt: { lt: new Date(now.getTime() - INSTAGRAM_SYNC.everyHours * HOUR_MS) } }] },
     select: { projectId: true },
   });
-  for (const { projectId } of due) await syncInstagram(projectId, client, now);
+  for (const { projectId } of due) {
+    try {
+      await syncInstagram(projectId, client, now);
+    } catch (error) {
+      console.error(`Instagram: обновление проекта ${projectId} прервано:`, error instanceof Error ? error.message : error);
+    }
+  }
   return due.length;
 }
