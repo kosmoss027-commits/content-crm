@@ -13,6 +13,15 @@ export function todayDay(now = new Date(), timeZone = PLAN_TIME_ZONE): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }
 
+/** Начало дня в часовом поясе плана (например, 00:00 по Алматы = 19:00 UTC накануне). Для полей со временем. */
+export function dayStartInZone(day: string, timeZone = PLAN_TIME_ZONE): Date {
+  const utcMidnight = dayToDate(day);
+  const name = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" }).formatToParts(utcMidnight).find((part) => part.type === "timeZoneName")?.value ?? "GMT";
+  const match = name.match(/GMT([+-])(\d{2}):(\d{2})/);
+  const offsetMs = match ? (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3])) * 60_000 : 0;
+  return new Date(utcMidnight.getTime() - offsetMs);
+}
+
 export function dayToDate(day: string): Date {
   return new Date(`${day}T00:00:00.000Z`);
 }

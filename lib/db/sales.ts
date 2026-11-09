@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { AppError, notFoundError } from "@/lib/db/errors";
 import { assertCan, type ProjectContext } from "@/lib/db/access";
 import { parseInput } from "@/lib/validation";
-import { dayToDate, isDay } from "@/lib/content/dates";
+import { addDays, dayStartInZone, dayToDate, isDay } from "@/lib/content/dates";
 import { normalizeHandle, normalizeWord } from "@/lib/crm/keywords";
 
 const source = z.enum(["COMMENT", "DIRECT", "TELEGRAM", "OTHER"]);
@@ -107,7 +107,7 @@ export async function createLead(ctx: ProjectContext, raw: z.input<typeof leadIn
     const existing = await prisma.lead.findFirst({ where: { projectId: ctx.projectId, keywordId, handle }, select: { id: true } });
     if (existing) throw new AppError("CONFLICT", "Эта заявка уже есть: человек уже писал это слово.");
   }
-  return prisma.lead.create({
+  const created = prisma.lead.create({
     data: {
       workspaceId: ctx.workspaceId,
       projectId: ctx.projectId,
@@ -117,9 +117,14 @@ export async function createLead(ctx: ProjectContext, raw: z.input<typeof leadIn
       keywordId,
       publicationId,
       note: input.note,
-      firstTouchAt: input.date ? dayToDate(input.date) : now,
+      firstTouchAt: input.date ? dayStartInZone(input.date) : now,
     },
     select: { id: true },
+  });
+  return created.catch((error: unknown) => {
+    // Одновременно пришла такая же заявка (например, из комментариев)
+    if ((error as { code?: string }).code === "P2002") throw new AppError("CONFLICT", "Эта заявка уже есть: человек уже писал это слово.");
+    throw error;
   });
 }
 
@@ -148,7 +153,9 @@ export async function convertLead(ctx: ProjectContext, id: string) {
   if (lead.clientId) return { id: lead.clientId };
   const contact = lead.contact.trim();
   const isPhone = PHONE_RE.test(contact);
-  const client = await prisma.client.create({
+  // Двойной клик не должен создать двух клиентов: привязываем, только если заявка ещё свободна
+  return prisma.$transaction(async (tx) => {
+    const client = await tx.client.create({
     data: {
       workspaceId: ctx.workspaceId,
       projectId: ctx.projectId,
@@ -161,9 +168,13 @@ export async function convertLead(ctx: ProjectContext, id: string) {
       keywordId: lead.keywordId,
     },
     select: { id: true },
+    });
+    const linked = await tx.lead.updateMany({ where: { id: lead.id, clientId: null }, data: { clientId: client.id, status: "CLIENT" } });
+    if (linked.count > 0) return client;
+    await tx.client.delete({ where: { id: client.id } });
+    const current = await tx.lead.findUniqueOrThrow({ where: { id: lead.id }, select: { clientId: true } });
+    return { id: current.clientId! };
   });
-  await prisma.lead.update({ where: { id: lead.id }, data: { clientId: client.id, status: "CLIENT" } });
-  return client;
 }
 
 // ─── Клиенты и оплаты ───
@@ -265,9 +276,8 @@ export async function deletePayment(ctx: ProjectContext, id: string) {
 
 type Range = { from: string; to: string } | null;
 
-const DAY_MS = 86_400_000;
-/** Для полей со временем (касание): весь последний день включительно. */
-const timeRange = (range: Range) => (range ? { gte: dayToDate(range.from), lt: new Date(dayToDate(range.to).getTime() + DAY_MS) } : undefined);
+/** Для полей со временем (касание): дни по часовому поясу плана, последний день включительно. */
+const timeRange = (range: Range) => (range ? { gte: dayStartInZone(range.from), lt: dayStartInZone(addDays(range.to, 1)) } : undefined);
 /** Для полей-дат (DATE). */
 const dateRange = (range: Range) => (range ? { gte: dayToDate(range.from), lte: dayToDate(range.to) } : undefined);
 
@@ -286,23 +296,26 @@ export type KeywordReportRow = {
 };
 
 /**
- * Посты — опубликованное с этим словом; написали — комментарии со словом + ручные заявки с ним;
+ * Посты — опубликованное с этим словом; написали — разные люди (комментарии со словом и заявки с ним);
  * лиды — заявки (первое касание в периоде); оплаты и выручка — оплаты в периоде клиентов, пришедших по слову.
  */
 export async function keywordReport(ctx: ProjectContext, range: Range): Promise<KeywordReportRow[]> {
   const touched = timeRange(range);
   const dated = dateRange(range);
-  const [keywords, publications, mentions, manualLeads, leads, payments] = await Promise.all([
+  const [keywords, publications, mentionPeople, leadPeople, leads, payments] = await Promise.all([
     prisma.keyword.findMany({ where: { projectId: ctx.projectId }, orderBy: { word: "asc" } }),
     prisma.publication.findMany({
       where: { projectId: ctx.projectId, status: "PUBLISHED", codeWord: { not: null }, ...(dated ? { date: dated } : {}) },
       select: { codeWord: true, views: true },
     }),
-    prisma.keywordMention.groupBy({ by: ["keywordId"], where: { projectId: ctx.projectId, ...(touched ? { at: touched } : {}) }, _count: true }),
-    prisma.lead.groupBy({
-      by: ["keywordId"],
-      where: { projectId: ctx.projectId, source: { not: "COMMENT" }, keywordId: { not: null }, ...(touched ? { firstTouchAt: touched } : {}) },
-      _count: true,
+    prisma.keywordMention.findMany({
+      where: { projectId: ctx.projectId, ...(touched ? { at: touched } : {}) },
+      distinct: ["keywordId", "handle"],
+      select: { keywordId: true, handle: true },
+    }),
+    prisma.lead.findMany({
+      where: { projectId: ctx.projectId, keywordId: { not: null }, ...(touched ? { firstTouchAt: touched } : {}) },
+      select: { keywordId: true, handle: true },
     }),
     prisma.lead.groupBy({ by: ["keywordId"], where: { projectId: ctx.projectId, keywordId: { not: null }, ...(touched ? { firstTouchAt: touched } : {}) }, _count: true }),
     prisma.payment.findMany({
@@ -312,14 +325,17 @@ export async function keywordReport(ctx: ProjectContext, range: Range): Promise<
   ]);
 
   const countBy = (rows: { keywordId: string | null; _count: number }[]) => new Map(rows.map((r) => [r.keywordId, r._count]));
-  const mentionCount = countBy(mentions);
-  const manualCount = countBy(manualLeads);
   const leadCount = countBy(leads);
+  // «Написали» — разные люди: из комментариев и из заявок (директ, Telegram), без двойного счёта
+  const people = new Map<string, Set<string>>();
+  for (const { keywordId, handle } of [...mentionPeople, ...leadPeople]) {
+    if (keywordId) people.set(keywordId, (people.get(keywordId) ?? new Set<string>()).add(handle.toLowerCase()));
+  }
 
   return keywords.map((keyword) => {
     const posts = publications.filter((p) => normalizeWord(p.codeWord ?? "") === keyword.word);
     const views = posts.reduce((sum, p) => sum + (p.views ?? 0), 0);
-    const wrote = (mentionCount.get(keyword.id) ?? 0) + (manualCount.get(keyword.id) ?? 0);
+    const wrote = people.get(keyword.id)?.size ?? 0;
     const own = payments.filter((p) => p.client.keywordId === keyword.id);
     return {
       id: keyword.id,

@@ -8,6 +8,7 @@ import {
   convertLead,
   createKeyword,
   createLead,
+  deleteLead,
   getClient,
   keywordReport,
   listClients,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/db/sales";
 import { findKeywords, normalizeHandle, normalizeWord } from "@/lib/crm/keywords";
 import { recordComments } from "@/lib/crm/comments";
+import { dayStartInZone } from "@/lib/content/dates";
 import { createUser, createWorkspace, resetDatabase } from "./helpers";
 
 const expectCode = (code: AppError["code"]) => expect.objectContaining({ name: "AppError", code });
@@ -106,7 +108,30 @@ describe("заявки, клиенты, оплаты", () => {
     expect(leads[0]).toMatchObject({ handle: "ivan", source: "COMMENT", publication: { title: "Первый" } });
 
     const [row] = await keywordReport(ctxA, { from: "2026-11-01", to: "2026-11-30" });
-    expect(row).toMatchObject({ word: "ПУТЬ", posts: 2, views: 5000, wrote: 2, leads: 1, payments: 0, revenueRub: 0 });
-    expect(row.per1000).toBeCloseTo(0.4);
+    // Иван написал слово дважды — это один человек
+    expect(row).toMatchObject({ word: "ПУТЬ", posts: 2, views: 5000, wrote: 1, leads: 1, payments: 0, revenueRub: 0 });
+    expect(row.per1000).toBeCloseTo(0.2);
+  });
+
+  it("два слова в одном комментарии, удалённая заявка не возвращается, двойной «Стал клиентом» — один клиент", async () => {
+    const { ctxA } = await setup();
+    await createKeyword(ctxA, { word: "ПУТЬ" });
+    await createKeyword(ctxA, { word: "ГИД" });
+    const project = { projectId: ctxA.projectId, workspaceId: ctxA.workspaceId };
+    const comment = { igCommentId: "c1", igMediaId: "m1", username: "olga", text: "путь и гид", at: new Date("2026-11-06T10:00:00Z") };
+
+    expect(await recordComments(project, [comment])).toEqual({ mentions: 2, newLeads: 2 });
+    const leads = await listLeads(ctxA);
+    await deleteLead(ctxA, leads[0].id);
+    expect(await recordComments(project, [comment])).toEqual({ mentions: 0, newLeads: 0 });
+    expect(await listLeads(ctxA)).toHaveLength(1);
+
+    const [a, b] = await Promise.all([convertLead(ctxA, leads[1].id), convertLead(ctxA, leads[1].id)]);
+    expect(a.id).toBe(b.id);
+    expect(await listClients(ctxA)).toHaveLength(1);
+  });
+
+  it("день периода считается по Алматы", () => {
+    expect(dayStartInZone("2026-11-10").toISOString()).toBe("2026-11-09T19:00:00.000Z");
   });
 });

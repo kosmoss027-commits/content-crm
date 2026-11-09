@@ -29,8 +29,17 @@ export async function recordComments(project: { projectId: string; workspaceId: 
   );
   if (matches.length === 0) return { mentions: 0, newLeads: 0 };
 
+  // Заявки создаём только по новым комментариям: если заявку удалили вручную, повторное обновление её не вернёт
+  const known = await prisma.keywordMention.findMany({
+    where: { projectId: project.projectId, igCommentId: { in: [...new Set(matches.map((m) => m.comment.igCommentId))] } },
+    select: { igCommentId: true, keywordId: true },
+  });
+  const knownKeys = new Set(known.map((k) => `${k.igCommentId}|${k.keywordId}`));
+  const fresh = matches.filter((m) => !knownKeys.has(`${m.comment.igCommentId}|${m.keywordId}`));
+  if (fresh.length === 0) return { mentions: 0, newLeads: 0 };
+
   const created = await prisma.keywordMention.createMany({
-    data: matches.map((m) => ({
+    data: fresh.map((m) => ({
       workspaceId: project.workspaceId,
       projectId: project.projectId,
       keywordId: m.keywordId,
@@ -46,7 +55,7 @@ export async function recordComments(project: { projectId: string; workspaceId: 
   // Одна заявка на человека и слово; если нашли более раннее касание — источник переносим на него
   let newLeads = 0;
   const earliest = new Map<string, (typeof matches)[number]>();
-  for (const m of matches) {
+  for (const m of fresh) {
     const key = `${m.keywordId}|${m.handle}`;
     const prev = earliest.get(key);
     if (!prev || m.comment.at < prev.comment.at) earliest.set(key, m);
@@ -57,7 +66,8 @@ export async function recordComments(project: { projectId: string; workspaceId: 
       select: { id: true, firstTouchAt: true },
     });
     if (!existing) {
-      await prisma.lead.create({
+      const createdLead = await prisma.lead
+        .create({
         data: {
           workspaceId: project.workspaceId,
           projectId: project.projectId,
@@ -68,10 +78,19 @@ export async function recordComments(project: { projectId: string; workspaceId: 
           firstTouchAt: m.comment.at,
           note: m.comment.text.slice(0, 500),
         },
-      });
-      newLeads += 1;
+        })
+        // Параллельное обновление уже создало эту заявку — не ошибка
+        .catch((error: unknown) => {
+          if ((error as { code?: string }).code === "P2002") return null;
+          throw error;
+        });
+      if (createdLead) newLeads += 1;
     } else if (m.comment.at < existing.firstTouchAt) {
-      await prisma.lead.update({ where: { id: existing.id }, data: { firstTouchAt: m.comment.at, publicationId: m.publicationId } });
+      // Известный источник не затираем пустым
+      await prisma.lead.update({
+        where: { id: existing.id },
+        data: { firstTouchAt: m.comment.at, ...(m.publicationId ? { publicationId: m.publicationId } : {}) },
+      });
     }
   }
   return { mentions: created.count, newLeads };

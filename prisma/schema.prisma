@@ -565,7 +565,7 @@ model KeywordMention {
   keyword       Keyword      @relation(fields: [keywordId], references: [id], onDelete: Cascade)
   publication   Publication? @relation(fields: [publicationId], references: [id], onDelete: SetNull)
 
-  @@unique([projectId, igCommentId])
+  @@unique([projectId, igCommentId, keywordId])
   @@index([projectId, keywordId, at])
 }
 
@@ -591,6 +591,8 @@ model Lead {
   publication   Publication? @relation(fields: [publicationId], references: [id], onDelete: SetNull)
   client        Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
+  /// Одна заявка на человека и слово (NULL-слово не ограничено)
+  @@unique([projectId, keywordId, handle])
   @@index([projectId, status])
   @@index([projectId, firstTouchAt])
 }
