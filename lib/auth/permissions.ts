@@ -15,13 +15,15 @@ export type Action =
   | "project.manage" // создать, переименовать, архивировать проект
   | "member.manage" // пригласить, сменить роль, удалить участника
   | "settings.view"
-  | "research.manage"; // добавлять аккаунты в разведку, запускать сбор, отмечать ролики
+  | "research.manage" // добавлять аккаунты в разведку, запускать сбор, отмечать ролики
+  | "content.manage"; // контент-план, публикации, статистика, подключение Instagram
 
 const ACTIONS: Record<Action, Role[]> = {
   "project.manage": ["OWNER"],
   "member.manage": ["OWNER"],
   "settings.view": ["OWNER"],
   "research.manage": ["OWNER", "ASSISTANT", "SMM"],
+  "content.manage": ["OWNER", "ASSISTANT", "SMM"],
 };
 
 export function can(role: Role, action: Action): boolean {

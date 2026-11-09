@@ -90,6 +90,8 @@ model Project {
   techniques       Technique[]
   hypotheses       Hypothesis[]
   scripts          Script[]
+  publications     Publication[]
+  instagram        InstagramConnection?
 
   @@index([workspaceId])
 }
@@ -169,6 +171,7 @@ model ScrapedReel {
   media          ReelMedia?
   analyses       ReelAnalysis[]
   hypotheses     HypothesisReel[]
+  publications   Publication[]
 
   @@index([accountId, postedAt])
   @@index([postedAt])
@@ -384,6 +387,7 @@ model Script {
   project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   analysis    ReelAnalysis?    @relation(fields: [analysisId], references: [id], onDelete: SetNull)
   revisions   ScriptRevision[]
+  publication Publication?
 
   @@index([projectId, status])
 }
@@ -411,4 +415,95 @@ model AiUsage {
   createdAt    DateTime    @default(now())
 
   @@index([createdAt])
+}
+
+// ─── CRM контента (этап 4) ──────────────────────────────────
+
+enum Platform {
+  INSTAGRAM
+  STORIES
+  THREADS
+  TELEGRAM
+  YOUTUBE
+}
+
+enum PublicationType {
+  SALES // продающий / прогрев
+  ENGAGING // вовлекающий / лайф
+  EXPERT // экспертный
+  CASE // кейс / отзыв
+  ANNOUNCE // анонс / эфир
+}
+
+enum PublicationStatus {
+  IDEA
+  SCRIPT
+  SHOOT
+  EDIT
+  READY
+  PUBLISHED
+}
+
+/// Публикация в контент-плане проекта. Статистика: из Instagram API (если подключён) или вручную.
+model Publication {
+  id              String            @id @default(cuid())
+  workspaceId     String
+  projectId       String
+  platform        Platform          @default(INSTAGRAM)
+  type            PublicationType   @default(EXPERT)
+  status          PublicationStatus @default(IDEA)
+  /// День в плане (без времени). null — идея без даты
+  date            DateTime?         @db.Date
+  title           String
+  text            String            @default("")
+  note            String            @default("")
+  codeWord        String?
+  labels          String[]
+  isStar          Boolean           @default(false)
+  referenceReelId String?
+  scriptId        String?           @unique
+  // Публикация в Instagram
+  igMediaId       String?
+  permalink       String?
+  mediaType       String?
+  thumbnailUrl    String?
+  publishedAt     DateTime?
+  // Статистика из API
+  views           Int?
+  reach           Int?
+  likes           Int?
+  comments        Int?
+  saves           Int?
+  shares          Int?
+  avgWatchSec     Float?
+  statsUpdatedAt  DateTime?
+  // Вносится вручную
+  coldAudiencePct Float?
+  profileVisits   Int?
+  linkClicks      Int?
+  follows         Int?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  project         Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  referenceReel   ScrapedReel?      @relation(fields: [referenceReelId], references: [id], onDelete: SetNull)
+  script          Script?           @relation(fields: [scriptId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, igMediaId])
+  @@index([projectId, date])
+}
+
+/// Подключённый Instagram проекта (официальный API, вход через Instagram). Токен хранится зашифрованным.
+model InstagramConnection {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  projectId      String    @unique
+  igUserId       String
+  username       String
+  accessTokenEnc String
+  expiresAt      DateTime
+  lastSyncAt     DateTime?
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
