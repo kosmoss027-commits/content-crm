@@ -31,5 +31,5 @@ export const DAY_KINDS: { value: WarmupDayKind; label: string; className: string
 /** Календарь прогрева показывает N месяцев от старта кампании */
 export const WARMUP_CALENDAR_MONTHS = 3;
 
-/** Самая длинная кампания, дней */
-export const WARMUP_MAX_DAYS = 366;
+/** Самая длинная кампания, дней — укладывается в календарь на 3 месяца */
+export const WARMUP_MAX_DAYS = 92;

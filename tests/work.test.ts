@@ -5,7 +5,7 @@ import { AppError } from "@/lib/db/errors";
 import { createPublication, getPublication } from "@/lib/db/publications";
 import { createClient } from "@/lib/db/sales";
 import { createCampaign, getCampaign, saveWarmupDay, updateCampaign } from "@/lib/db/warmups";
-import { bucketTasks, createTask, listTasks, myUpcomingTasks, openTaskCounts, setTaskStatus } from "@/lib/db/tasks";
+import { bucketTasks, createTask, deleteTask, listTasks, myUpcomingTasks, openTaskCounts, setTaskStatus } from "@/lib/db/tasks";
 import { createUser, createWorkspace, resetDatabase } from "./helpers";
 
 const expectCode = (code: AppError["code"]) => expect.objectContaining({ name: "AppError", code });
@@ -41,6 +41,9 @@ describe("прогревы", () => {
     const base = { name: "Прогрев к наставничеству", startDate: "2026-12-01", endDate: "2026-12-28", salesStartDate: "2026-12-25" };
     await expect(createCampaign(managerCtx, base)).rejects.toEqual(expectCode("FORBIDDEN"));
     await expect(createCampaign(ownerCtx, { ...base, endDate: "2026-11-01" })).rejects.toEqual(expectCode("VALIDATION"));
+    await expect(createCampaign(ownerCtx, { ...base, endDate: "2027-06-01" })).rejects.toEqual(expectCode("VALIDATION"));
+    await expect(createCampaign(ownerCtx, { ...base, salesStartDate: "2027-01-10" })).rejects.toEqual(expectCode("VALIDATION"));
+    await expect(createCampaign(ownerCtx, { ...base, startDate: "2026-02-31" })).rejects.toEqual(expectCode("VALIDATION"));
     const campaign = await createCampaign(ownerCtx, base);
 
     await saveWarmupDay(ownerCtx, campaign.id, "2026-12-05", { kind: "LIVE", meaning: "эфир про старт", meanings: ["FOMO", "PRODUCT"] });
@@ -54,7 +57,7 @@ describe("прогревы", () => {
 
     // Сократили период — дни за его пределами уходят
     await saveWarmupDay(ownerCtx, campaign.id, "2026-12-20", { meaning: "оффер" });
-    await updateCampaign(ownerCtx, campaign.id, { ...base, endDate: "2026-12-15" });
+    await updateCampaign(ownerCtx, campaign.id, { ...base, endDate: "2026-12-15", salesStartDate: "2026-12-14" });
     expect((await getCampaign(ownerCtx, campaign.id)).days).toEqual([]);
   });
 
@@ -88,6 +91,14 @@ describe("задачи", () => {
     expect((await listTasks(managerCtx)).map((t) => t.title)).toEqual(["Позвонить Марии"]);
     expect(await listTasks(strangerCtx)).toEqual([]);
     expect(await openTaskCounts(ownerCtx)).toEqual({ [manager.id]: 1, [smm.id]: 1 });
+
+    // Задачу по клиенту не поручить SMM; менеджер не привязывает публикации; удаляет автор или владелец
+    await expect(createTask(ownerCtx, { title: "x", clientId: client.id, assigneeId: smm.id })).rejects.toEqual(expectCode("VALIDATION"));
+    const pub = await createPublication(ownerCtx, { title: "Пост", platform: "INSTAGRAM", type: "EXPERT", status: "IDEA", date: null });
+    await expect(createTask(managerCtx, { title: "x", publicationId: pub.id })).rejects.toEqual(expectCode("FORBIDDEN"));
+    const ownerTask = (await listTasks(ownerCtx)).find((t) => t.title === "Снять ролик")!;
+    await expect(deleteTask(smmCtx, ownerTask.id)).rejects.toEqual(expectCode("FORBIDDEN"));
+    await deleteTask(ownerCtx, ownerTask.id);
   });
 
   it("мои задачи на сегодня-завтра, просроченные, отметка «готово»", async () => {

@@ -39,7 +39,8 @@ const campaignInput = z
     note: z.string().max(5000, "Заметка — до 5000 символов").default(""),
   })
   .refine((c) => c.endDate >= c.startDate, "Конец прогрева не раньше начала")
-  .refine((c) => daysBetween(c.startDate, c.endDate) < WARMUP_MAX_DAYS, `Прогрев — не длиннее ${WARMUP_MAX_DAYS} дней`);
+  .refine((c) => daysBetween(c.startDate, c.endDate) < WARMUP_MAX_DAYS, `Прогрев — не длиннее ${WARMUP_MAX_DAYS} дней (3 месяца)`)
+  .refine((c) => !c.salesStartDate || (c.salesStartDate >= c.startDate && c.salesStartDate <= c.endDate), "Старт продаж — внутри периода прогрева");
 
 export type CampaignInput = z.input<typeof campaignInput>;
 

@@ -94,7 +94,15 @@ async function checkLinks(ctx: ProjectContext, input: z.output<typeof taskInput>
       : true,
   ]);
   if (!assignee || !publication || !client || !reel) throw notFoundError();
+  // Привязывать можно только то, что роль видит сама
   if (input.clientId && !can(ctx.role, "sales.manage")) throw new AppError("FORBIDDEN", "Задачи по клиентам ставят владелец и менеджер.");
+  if (input.publicationId && !can(ctx.role, "content.manage")) throw new AppError("FORBIDDEN", "Привязать публикацию может владелец, ассистент или SMM.");
+  if (input.reelId && !can(ctx.role, "research.manage")) throw new AppError("FORBIDDEN", "Привязать ролик из разведки может владелец, ассистент или SMM.");
+  // Задачу по клиенту исполнитель без доступа к продажам не увидит
+  if (input.clientId && input.assigneeId) {
+    const member = await prisma.membership.findFirst({ where: { workspaceId: ctx.workspaceId, userId: input.assigneeId }, select: { role: true } });
+    if (member && !can(member.role, "sales.manage")) throw new AppError("VALIDATION", "Задачу по клиенту можно поручить только владельцу или менеджеру.");
+  }
 }
 
 export async function createTask(ctx: ProjectContext, raw: TaskInput) {
@@ -125,8 +133,11 @@ export async function setTaskStatus(ctx: ProjectContext, id: string, status: str
   await prisma.task.update({ where: { id: task.id }, data: { status: next, doneAt: next === "DONE" ? now : null } });
 }
 
+/** Удалить может автор задачи или владелец. */
 export async function deleteTask(ctx: ProjectContext, id: string) {
   const task = await findVisible(ctx, id);
+  const row = await prisma.task.findUniqueOrThrow({ where: { id: task.id }, select: { createdById: true } });
+  if (ctx.role !== "OWNER" && row.createdById !== ctx.userId) throw new AppError("FORBIDDEN", "Удалить задачу может её автор или владелец.");
   await prisma.task.delete({ where: { id: task.id } });
 }
 

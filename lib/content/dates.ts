@@ -4,8 +4,11 @@ import { PLAN_TIME_ZONE } from "@/config/content";
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** «ГГГГ-ММ-ДД» и такой день существует (31 февраля — нет). */
 export function isDay(value: string): boolean {
-  return DAY_RE.test(value) && !Number.isNaN(dayToDate(value).getTime());
+  if (!DAY_RE.test(value)) return false;
+  const date = dayToDate(value);
+  return !Number.isNaN(date.getTime()) && dateToDay(date) === value;
 }
 
 /** «Сегодня» в часовом поясе плана */
