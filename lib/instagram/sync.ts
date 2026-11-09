@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { assertCan, type ProjectContext } from "@/lib/db/access";
 import { dayToDate, shortDay, todayDay } from "@/lib/content/dates";
 import { decryptToken, encryptToken } from "@/lib/instagram/crypto";
+import { recordComments, type IncomingComment } from "@/lib/crm/comments";
 import { InstagramApiError, type IgInsights, type IgMedia, type IgProfile, type IgToken, type InstagramClient } from "@/lib/instagram/client";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -90,7 +91,24 @@ async function upsertMedia(connection: { projectId: string; workspaceId: string 
   return "created";
 }
 
-export type SyncReport = { media: number; created: number; linked: number; updated: number; insightErrors: number };
+export type SyncReport = { media: number; created: number; linked: number; updated: number; insightErrors: number; newLeads: number };
+
+/** Комментарии свежих публикаций → кодовые слова → заявки. Только если в проекте есть кодовые слова. */
+async function syncComments(connection: { projectId: string; workspaceId: string }, client: InstagramClient, accessToken: string, media: IgMedia[], now: Date) {
+  const hasKeywords = await prisma.keyword.count({ where: { projectId: connection.projectId, archivedAt: null } });
+  if (!hasKeywords) return 0;
+  const recent = media.filter((m) => now.getTime() - m.timestamp.getTime() < INSTAGRAM_SYNC.commentsDays * DAY_MS);
+  const comments: IncomingComment[] = [];
+  for (const m of recent) {
+    try {
+      const items = await client.listComments(accessToken, m.id);
+      comments.push(...items.map((c) => ({ igCommentId: c.id, igMediaId: m.id, username: c.username, text: c.text, at: c.timestamp })));
+    } catch (error) {
+      console.error(`Instagram: нет комментариев для ${m.id}:`, error instanceof Error ? error.message : error);
+    }
+  }
+  return (await recordComments(connection, comments)).newLeads;
+}
 
 /** Обновить публикации проекта из Instagram. Ошибку доступа записывает в подключение, а не бросает дальше. */
 export async function syncInstagram(projectId: string, client: InstagramClient, now = new Date()): Promise<SyncReport | { error: string }> {
@@ -105,7 +123,7 @@ export async function syncInstagram(projectId: string, client: InstagramClient, 
     }
 
     const media = await client.listMedia(accessToken, INSTAGRAM_SYNC.mediaLimit);
-    const report: SyncReport = { media: media.length, created: 0, linked: 0, updated: 0, insightErrors: 0 };
+    const report: SyncReport = { media: media.length, created: 0, linked: 0, updated: 0, insightErrors: 0, newLeads: 0 };
     for (const item of media) {
       if (Number.isNaN(item.timestamp.getTime())) continue; // без даты публикацию не разместить в плане
       let insights: IgInsights = {};
@@ -123,6 +141,7 @@ export async function syncInstagram(projectId: string, client: InstagramClient, 
         console.error(`Instagram: не удалось сохранить ${item.id}:`, error instanceof Error ? error.message : error);
       }
     }
+    report.newLeads = await syncComments(connection, client, accessToken, media, now);
     await prisma.instagramConnection.update({ where: { id: connection.id }, data: { lastSyncAt: now, lastError: null } });
     return report;
   } catch (error) {

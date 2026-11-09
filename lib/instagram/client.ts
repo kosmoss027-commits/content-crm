@@ -16,6 +16,7 @@ export type IgMedia = {
   likeCount: number | null;
   commentsCount: number | null;
 };
+export type IgComment = { id: string; username: string; text: string; timestamp: Date };
 export type IgInsights = Partial<Record<"views" | "reach" | "likes" | "comments" | "saved" | "shares" | "ig_reels_avg_watch_time", number>>;
 
 export interface InstagramClient {
@@ -25,6 +26,7 @@ export interface InstagramClient {
   profile(accessToken: string): Promise<IgProfile>;
   listMedia(accessToken: string, limit: number): Promise<IgMedia[]>;
   insights(accessToken: string, media: IgMedia): Promise<IgInsights>;
+  listComments(accessToken: string, mediaId: string): Promise<IgComment[]>;
 }
 
 export class InstagramApiError extends Error {
@@ -132,6 +134,15 @@ export function createInstagramClient(fetchImpl: FetchLike = fetch, clock: () =>
         likeCount: num(m.like_count),
         commentsCount: num(m.comments_count),
       }));
+    },
+
+    /** Последние комментарии под публикацией (для кодовых слов). */
+    async listComments(accessToken, mediaId) {
+      const body = await readJson(await fetchImpl(graph(`${mediaId}/comments`, { fields: "id,text,username,timestamp", limit: "100", access_token: accessToken })));
+      const items = Array.isArray(body.data) ? (body.data as Record<string, unknown>[]) : [];
+      return items
+        .filter((c) => typeof c.username === "string" && typeof c.text === "string")
+        .map((c) => ({ id: String(c.id), username: c.username as string, text: c.text as string, timestamp: new Date(String(c.timestamp)) }));
     },
 
     /** Пустой ответ по метрике — «нет данных», а не ноль. У альбомов статистики нет. */

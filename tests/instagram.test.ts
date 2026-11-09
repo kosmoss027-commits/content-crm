@@ -49,6 +49,9 @@ function fakeClient(items: IgMedia[], insights: Record<string, Record<string, nu
       if (fail) throw fail;
       return items;
     },
+    async listComments() {
+      return [];
+    },
     async insights(_token, m) {
       if (m.id === "broken") throw new InstagramApiError("Media posted before business conversion", 400);
       return insights[m.id] ?? {};
@@ -130,7 +133,7 @@ describe("Instagram: подключение и обновление", () => {
 
     const items = [media("m1", "2026-11-05T15:00:00Z"), media("m2", "2026-11-06T04:00:00Z"), media("broken", "2026-11-07T04:00:00Z")];
     const { client } = fakeClient(items, { m1: { views: 1500, reach: 1100, ig_reels_avg_watch_time: 6400 } });
-    expect(await syncInstagram(ctxA.projectId, client, NOW)).toEqual({ media: 3, created: 2, linked: 1, updated: 0, insightErrors: 1 });
+    expect(await syncInstagram(ctxA.projectId, client, NOW)).toEqual({ media: 3, created: 2, linked: 1, updated: 0, insightErrors: 1, newLeads: 0 });
 
     const linked = await prisma.publication.findUniqueOrThrow({ where: { id: planned.id } });
     expect(linked).toMatchObject({ igMediaId: "m1", status: "PUBLISHED", title: "Мой план", views: 1500, avgWatchSec: 6.4, likes: 10 });

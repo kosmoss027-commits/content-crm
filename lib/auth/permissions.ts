@@ -16,7 +16,8 @@ export type Action =
   | "member.manage" // пригласить, сменить роль, удалить участника
   | "settings.view"
   | "research.manage" // добавлять аккаунты в разведку, запускать сбор, отмечать ролики
-  | "content.manage"; // контент-план, публикации, статистика, подключение Instagram
+  | "content.manage" // контент-план, публикации, статистика, подключение Instagram
+  | "sales.manage"; // кодовые слова, заявки, клиенты, оплаты
 
 const ACTIONS: Record<Action, Role[]> = {
   "project.manage": ["OWNER"],
@@ -24,6 +25,7 @@ const ACTIONS: Record<Action, Role[]> = {
   "settings.view": ["OWNER"],
   "research.manage": ["OWNER", "ASSISTANT", "SMM"],
   "content.manage": ["OWNER", "ASSISTANT", "SMM"],
+  "sales.manage": ["OWNER", "MANAGER"],
 };
 
 export function can(role: Role, action: Action): boolean {

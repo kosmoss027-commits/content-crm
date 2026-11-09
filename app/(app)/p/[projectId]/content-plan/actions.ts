@@ -93,7 +93,7 @@ export async function syncInstagramAction(projectId: string): Promise<ActionStat
     assertCan(ctx, "content.manage");
     const report = await syncInstagram(ctx.projectId, instagramClient);
     if ("error" in report) throw new AppError("CONFLICT", report.error);
-    message = `Из Instagram: ${report.media} публ., новых ${report.created}, связано с планом ${report.linked}.`;
+    message = `Из Instagram: ${report.media} публ., новых ${report.created}, связано с планом ${report.linked}${report.newLeads ? `, новых заявок ${report.newLeads}` : ""}.`;
   });
   refresh(projectId);
   return result?.ok ? { ok: true, message } : result;

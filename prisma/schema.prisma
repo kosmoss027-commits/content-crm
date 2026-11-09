@@ -92,6 +92,11 @@ model Project {
   scripts          Script[]
   publications     Publication[]
   instagram        InstagramConnection?
+  keywords         Keyword[]
+  leads            Lead[]
+  clients          Client[]
+  payments         Payment[]
+  mentions         KeywordMention[]
 
   @@index([workspaceId])
 }
@@ -487,6 +492,8 @@ model Publication {
   project         Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   referenceReel   ScrapedReel?      @relation(fields: [referenceReelId], references: [id], onDelete: SetNull)
   script          Script?           @relation(fields: [scriptId], references: [id], onDelete: SetNull)
+  leads           Lead[]
+  mentions        KeywordMention[]
 
   @@unique([projectId, igMediaId])
   @@index([projectId, date])
@@ -506,4 +513,123 @@ model InstagramConnection {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// ─── Деньги (этап 5): кодовые слова → лиды → клиенты → оплаты ──
+
+enum LeadSource {
+  COMMENT // комментарий в Instagram
+  DIRECT // директ
+  TELEGRAM
+  OTHER
+}
+
+enum LeadStatus {
+  NEW
+  IN_PROGRESS
+  CLIENT
+  LOST
+}
+
+/// Кодовое слово проекта (ПУТЬ, ПЛАН…). word хранится заглавными: сравнение без учёта регистра.
+model Keyword {
+  id          String           @id @default(cuid())
+  workspaceId String
+  projectId   String
+  word        String
+  /// К какому продукту или лид-магниту ведёт
+  product     String           @default("")
+  note        String           @default("")
+  archivedAt  DateTime?
+  createdAt   DateTime         @default(now())
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  leads       Lead[]
+  clients     Client[]
+  mentions    KeywordMention[]
+
+  @@unique([projectId, word])
+}
+
+/// Кто-то написал кодовое слово в комментарии. Один комментарий — одна запись.
+model KeywordMention {
+  id            String       @id @default(cuid())
+  workspaceId   String
+  projectId     String
+  keywordId     String
+  publicationId String?
+  handle        String
+  igCommentId   String
+  text          String       @default("")
+  at            DateTime
+  project       Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  keyword       Keyword      @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  publication   Publication? @relation(fields: [publicationId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, igCommentId])
+  @@index([projectId, keywordId, at])
+}
+
+/// Заявка. Относится к первой публикации, где человек написал слово (первое касание).
+model Lead {
+  id            String       @id @default(cuid())
+  workspaceId   String
+  projectId     String
+  keywordId     String?
+  publicationId String?
+  clientId      String?
+  /// Ник или имя; для Instagram — ник без @, строчными
+  handle        String
+  contact       String       @default("")
+  source        LeadSource
+  status        LeadStatus   @default(NEW)
+  note          String       @default("")
+  firstTouchAt  DateTime
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  project       Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  keyword       Keyword?     @relation(fields: [keywordId], references: [id], onDelete: SetNull)
+  publication   Publication? @relation(fields: [publicationId], references: [id], onDelete: SetNull)
+  client        Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([projectId, firstTouchAt])
+}
+
+model Client {
+  id          String      @id @default(cuid())
+  workspaceId String
+  projectId   String
+  name        String
+  phone       String      @default("")
+  telegram    String      @default("")
+  instagram   String      @default("")
+  email       String      @default("")
+  source      LeadSource?
+  keywordId   String?
+  notes       String      @default("")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  keyword     Keyword?    @relation(fields: [keywordId], references: [id], onDelete: SetNull)
+  leads       Lead[]
+  payments    Payment[]
+
+  @@index([projectId])
+}
+
+/// Оплата клиента. Деньги через сайт не идут — это запись для подсчёта выручки, в рублях.
+model Payment {
+  id          String   @id @default(cuid())
+  workspaceId String
+  projectId   String
+  clientId    String
+  amountRub   Int
+  product     String   @default("")
+  paidAt      DateTime @db.Date
+  note        String   @default("")
+  createdAt   DateTime @default(now())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, paidAt])
 }
