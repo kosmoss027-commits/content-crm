@@ -3,6 +3,8 @@ import { can } from "@/lib/auth/permissions";
 import { requireProjectContext, requireUser } from "@/lib/auth/session";
 import { getServiceBalances, isPlatformAdmin } from "@/lib/billing/balances";
 import { BalancesPanel } from "@/components/billing/balances-panel";
+import { getConnection } from "@/lib/instagram/sync";
+import { InstagramPanel } from "@/components/content/instagram-panel";
 import { prisma } from "@/lib/db/prisma";
 import { listWorkspaceProjects } from "@/lib/db/projects";
 import { getWorkspaceUsage } from "@/lib/db/workspaces";
@@ -12,18 +14,20 @@ import { CreateProjectForm, ProjectRow, ThresholdsForm, WorkspaceNameForm } from
 
 export const metadata = { title: "Настройки — Content CRM" };
 
-export default async function SettingsPage({ params }: PageProps<"/p/[projectId]/settings">) {
+export default async function SettingsPage({ params, searchParams }: PageProps<"/p/[projectId]/settings">) {
   const { projectId } = await params;
+  const instagramResult = (await searchParams).instagram;
   const ctx = await requireProjectContext(projectId);
   if (!can(ctx.role, "settings.view")) return <NoAccess />;
 
   const user = await requireUser();
   const showBalances = isPlatformAdmin(user.email);
-  const [projects, usage, thresholds, balances] = await Promise.all([
+  const [projects, usage, thresholds, balances, instagram] = await Promise.all([
     listWorkspaceProjects(ctx),
     getWorkspaceUsage(ctx),
     prisma.project.findUniqueOrThrow({ where: { id: ctx.projectId }, select: { viralThreshold: true, anomalyThreshold: true } }),
     showBalances ? getServiceBalances() : null,
+    getConnection(ctx),
   ]);
 
   return (
@@ -72,6 +76,22 @@ export default async function SettingsPage({ params }: PageProps<"/p/[projectId]
           <p className="text-xs text-muted-foreground">Лимиты тарифов задаются в config/plans.ts.</p>
         </SettingsBlock>
 
+        <SettingsBlock title="Instagram" id="instagram">
+          <InstagramPanel
+            projectId={projectId}
+            configured={Boolean(process.env.INSTAGRAM_APP_ID && process.env.INSTAGRAM_APP_SECRET && process.env.INSTAGRAM_TOKEN_KEY)}
+            result={typeof instagramResult === "string" ? instagramResult : ""}
+            status={
+              instagram && {
+                username: instagram.username,
+                expiresAt: instagram.expiresAt.toISOString(),
+                lastSyncAt: instagram.lastSyncAt?.toISOString() ?? null,
+                lastError: instagram.lastError,
+              }
+            }
+          />
+        </SettingsBlock>
+
         <SettingsBlock title="Разведка: залёты" id="research">
           <ThresholdsForm projectId={projectId} viral={thresholds.viralThreshold} anomaly={thresholds.anomalyThreshold} />
           <ul className="grid gap-1 text-sm text-muted-foreground">
@@ -93,9 +113,6 @@ export default async function SettingsPage({ params }: PageProps<"/p/[projectId]
           </SettingsBlock>
         )}
 
-        <SettingsBlock title="Шаблон сценария">
-          <Upcoming stage={3} text="Ваш шаблон: хук → кадры → финал, с подсказками «что снимать»." />
-        </SettingsBlock>
       </div>
     </>
   );
@@ -110,11 +127,3 @@ function SettingsBlock({ title, id, children }: { title: string; id?: string; ch
   );
 }
 
-function Upcoming({ stage, text }: { stage: number; text: string }) {
-  return (
-    <p className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-3 text-sm text-muted-foreground">
-      <Badge variant="secondary">Этап {stage}</Badge>
-      {text}
-    </p>
-  );
-}

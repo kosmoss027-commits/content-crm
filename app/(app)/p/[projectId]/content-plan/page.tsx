@@ -7,6 +7,8 @@ import { addDays, addMonths, dateToDay, isDay, monthEnd, monthStart, monthTitle,
 import { listPlan, listPublications, monthSummary, projectLabels, type ListFilters, type PlanItem } from "@/lib/db/publications";
 import { cn } from "@/lib/utils";
 import { NoAccess, PageHeader } from "@/components/section-placeholder";
+import { getConnection } from "@/lib/instagram/sync";
+import { InstagramSyncButton } from "@/components/content/instagram-panel";
 import { NewPublicationButton, PlanBoard, PlanFilters, type BoardItem, type BoardView } from "@/components/content/plan-board";
 
 export const metadata = { title: "Контент-план — Content CRM" };
@@ -53,11 +55,12 @@ export default async function ContentPlanPage({ params, searchParams }: PageProp
     return { day, inMonth: day.slice(0, 7) === anchor.slice(0, 7) };
   });
 
-  const [plan, list, summary, labels] = await Promise.all([
+  const [plan, list, summary, labels, instagram] = await Promise.all([
     view === "list" ? null : listPlan(ctx, view === "week" ? days[0] : gridStart, view === "week" ? days[6] : gridEnd, filters),
     view === "list" ? listPublications(ctx, filters) : null,
     monthSummary(ctx, anchor),
     projectLabels(ctx),
+    getConnection(ctx),
   ]);
 
   const step = (direction: 1 | -1) => (view === "month" ? addMonths(anchor, direction) : addDays(anchor, 7 * direction));
@@ -73,7 +76,14 @@ export default async function ContentPlanPage({ params, searchParams }: PageProp
       <PageHeader
         title="Контент-план"
         description={`За ${monthTitle(anchor).toLowerCase()} опубликовано ${summary.published} из ${summary.planned}`}
-        actions={can(ctx.role, "content.manage") ? <NewPublicationButton /> : undefined}
+        actions={
+          can(ctx.role, "content.manage") ? (
+            <div className="flex flex-wrap gap-2">
+              {instagram && <InstagramSyncButton projectId={projectId} />}
+              <NewPublicationButton />
+            </div>
+          ) : undefined
+        }
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -117,6 +127,7 @@ export default async function ContentPlanPage({ params, searchParams }: PageProp
         items={(plan?.dated ?? list ?? []).map(toBoard)}
         undated={(plan?.undated ?? []).map(toBoard)}
         canEdit={can(ctx.role, "content.manage")}
+        openNewOnLoad={query.new === "1"}
       />
     </>
   );

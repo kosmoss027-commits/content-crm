@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { runAction, type ActionState } from "@/lib/actions";
 import { requireProjectContext } from "@/lib/auth/session";
 import { dateToDay, todayDay } from "@/lib/content/dates";
+import { assertCan } from "@/lib/db/access";
+import { AppError } from "@/lib/db/errors";
+import { instagramClient } from "@/lib/instagram/client";
+import { disconnectInstagram, syncInstagram } from "@/lib/instagram/sync";
 import {
   createPublication,
   deletePublication,
@@ -79,6 +83,28 @@ export async function planFromScriptAction(projectId: string, scriptId: string):
   }, "Сценарий в контент-плане, в колонке «Без даты»");
   refresh(projectId);
   revalidatePath(`/p/${projectId}`, "layout");
+  return result;
+}
+
+export async function syncInstagramAction(projectId: string): Promise<ActionState> {
+  let message = "";
+  const result = await runAction(async () => {
+    const ctx = await requireProjectContext(projectId);
+    assertCan(ctx, "content.manage");
+    const report = await syncInstagram(ctx.projectId, instagramClient);
+    if ("error" in report) throw new AppError("CONFLICT", report.error);
+    message = `Из Instagram: ${report.media} публ., новых ${report.created}, связано с планом ${report.linked}.`;
+  });
+  refresh(projectId);
+  return result?.ok ? { ok: true, message } : result;
+}
+
+export async function disconnectInstagramAction(projectId: string): Promise<ActionState> {
+  const result = await runAction(async () => {
+    const ctx = await requireProjectContext(projectId);
+    await disconnectInstagram(ctx);
+  }, "Instagram отключён. Публикации и статистика остались в плане.");
+  revalidatePath(`/p/${projectId}/settings`);
   return result;
 }
 

@@ -43,8 +43,11 @@ export function PlanBoard({
   items,
   undated,
   canEdit,
+  openNewOnLoad = false,
 }: {
   projectId: string;
+  /** Пришли по кнопке «+ Публикация» в шапке — сразу открыть форму */
+  openNewOnLoad?: boolean;
   view: BoardView;
   /** Дни недели (7) для вида «неделя» */
   days: string[];
@@ -60,7 +63,9 @@ export function PlanBoard({
   const [local, applyMove] = useOptimistic(all, (state, move: { id: string; day: string | null; platform?: Platform }) =>
     state.map((i) => (i.id === move.id ? { ...i, day: move.day, platform: move.platform ?? i.platform } : i)),
   );
-  const [dialog, setDialog] = useState<DialogState>({ open: false });
+  const [dialog, setDialog] = useState<DialogState>(() =>
+    openNewOnLoad && canEdit ? { open: true, publication: null, day: today, platform: "INSTAGRAM" } : { open: false },
+  );
   const [dragId, setDragId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 

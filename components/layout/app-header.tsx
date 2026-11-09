@@ -5,7 +5,7 @@ import { MenuIcon, PlusIcon, SearchIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import Link from "next/link";
 import type { AccessibleProject } from "@/lib/db/projects";
 import { ProjectSwitcher } from "@/components/layout/project-switcher";
 import { Sidebar, type SidebarSection, type SidebarSpend } from "@/components/layout/sidebar";
@@ -56,17 +56,14 @@ export function AppHeader({
       </div>
 
       <div className="ml-auto flex items-center gap-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span tabIndex={0}>
-              <Button size="sm" disabled className="h-8">
-                <PlusIcon />
-                <span className="hidden sm:inline">Публикация</span>
-              </Button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>Появится вместе с контент-планом (этап 4)</TooltipContent>
-        </Tooltip>
+        {sections.some((s) => s.slug === "content-plan") && (
+          <Button asChild size="sm" className="h-8">
+            <Link href={`/p/${projectId}/content-plan?new=1`}>
+              <PlusIcon />
+              <span className="hidden sm:inline">Публикация</span>
+            </Link>
+          </Button>
+        )}
         <UserMenu user={user} />
       </div>
     </header>
