@@ -5,7 +5,8 @@ import { canOpenSection } from "@/lib/navigation";
 import { shortDay, todayDay, WEEKDAY_NAMES } from "@/lib/content/dates";
 import { bestWeekday, changePct, computeTiles, PERIODS, resolvePeriod, TILES, topAndBottom, type TileValues } from "@/lib/content/stats";
 import { projectLabels, publishedRows, type ListFilters } from "@/lib/db/publications";
-import { formatCount } from "@/lib/format";
+import { moneySummary } from "@/lib/db/sales";
+import { formatCount, formatRub } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { NoAccess, PageHeader } from "@/components/section-placeholder";
@@ -34,11 +35,21 @@ export default async function StatsPage({ params, searchParams }: PageProps<"/p/
   const period = resolvePeriod(param(query.period), today, { from: param(query.from), to: param(query.to) });
   const filters: ListFilters = { platform: param(query.platform), type: param(query.type), label: param(query.label) };
 
-  const [rows, previousRows, labels] = await Promise.all([
+  const showMoney = canOpenSection(ctx.role, "keywords");
+  const [rows, previousRows, labels, money, previousMoney] = await Promise.all([
     publishedRows(ctx, period.current, filters),
     period.previous ? publishedRows(ctx, period.previous, filters) : Promise.resolve(null),
     projectLabels(ctx),
+    showMoney ? moneySummary(ctx, period.current) : null,
+    showMoney && period.previous ? moneySummary(ctx, period.previous) : null,
   ]);
+  const moneyTiles = money
+    ? [
+        { key: "leads", label: "Заявки", value: formatCount(money.leads), change: previousMoney ? changePct(money.leads, previousMoney.leads) : null },
+        { key: "payments", label: "Оплаты", value: formatCount(money.payments), change: previousMoney ? changePct(money.payments, previousMoney.payments) : null },
+        { key: "revenue", label: "Выручка", value: formatRub(money.revenueRub), change: previousMoney ? changePct(money.revenueRub, previousMoney.revenueRub) : null },
+      ]
+    : [];
   const tiles = computeTiles(rows);
   const previous: TileValues | null = previousRows ? computeTiles(previousRows) : null;
   const best = bestWeekday(rows);
@@ -112,13 +123,20 @@ export default async function StatsPage({ params, searchParams }: PageProps<"/p/
       ) : (
         <div className="grid gap-6">
           <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            {TILES.map((tile) => {
-              const change = previous ? changePct(tiles[tile.key], previous[tile.key]) : null;
+            {[
+              ...TILES.map((tile) => ({
+                key: tile.key,
+                label: tile.label,
+                value: formatTile(tiles[tile.key], tile.format),
+                change: previous ? changePct(tiles[tile.key], previous[tile.key]) : null,
+              })),
+              ...moneyTiles,
+            ].map(({ key, label, value, change }) => {
               return (
-                <div key={tile.key} className="grid gap-1 rounded-xl border p-3">
-                  <dt className="text-xs text-muted-foreground">{tile.label}</dt>
+                <div key={key} className="grid gap-1 rounded-xl border p-3">
+                  <dt className="text-xs text-muted-foreground">{label}</dt>
                   <dd className="flex items-baseline justify-between gap-2">
-                    <span className="text-lg font-semibold tabular-nums">{formatTile(tiles[tile.key], tile.format)}</span>
+                    <span className="text-lg font-semibold tabular-nums">{value}</span>
                     {change !== null && Math.abs(change) >= 0.5 && (
                       <span className={cn("inline-flex items-center text-xs tabular-nums", change > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
                         {change > 0 ? <ArrowUpRightIcon className="size-3" aria-label="рост" /> : <ArrowDownRightIcon className="size-3" aria-label="падение" />}
@@ -130,7 +148,6 @@ export default async function StatsPage({ params, searchParams }: PageProps<"/p/
               );
             })}
           </dl>
-          <p className="-mt-3 text-xs text-muted-foreground">Лиды и оплаты появятся здесь на этапе 5 (кодовые слова).</p>
 
           <ViewsChart projectId={projectId} rows={rows} median={tiles.medianViews} />
 

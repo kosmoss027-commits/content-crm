@@ -45,3 +45,8 @@ export function formatDuration(seconds: number | null | undefined): string {
   const total = Math.round(seconds);
   return total < 60 ? `${total} с` : `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
+
+/** 15000 → «15 000 ₽» */
+export function formatRub(value: number): string {
+  return `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(value)} ₽`;
+}
