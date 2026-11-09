@@ -18,6 +18,7 @@ export async function listScripts(ctx: ProjectContext, status?: ScriptStatus) {
     include: {
       analysis: { select: { reel: { select: { id: true, url: true, coverUrl: true, multiplier: true, account: { select: { username: true } } } } } },
       revisions: { orderBy: { createdAt: "desc" }, take: 3, select: { instruction: true, createdAt: true } },
+      publication: { select: { id: true } },
     },
   });
 }

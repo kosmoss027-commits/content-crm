@@ -14,6 +14,7 @@ export function toScriptCard(script: ScriptWithRefs): ScriptCardData {
     auto: script.auto,
     reference: reel ? { url: reel.url, username: reel.account.username, multiplier: reel.multiplier } : null,
     lastRevision: script.revisions[0]?.instruction ?? null,
+    inPlan: script.publication !== null,
   };
 }
 

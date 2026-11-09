@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CheckIcon, ExternalLinkIcon, Loader2Icon, SparklesIcon, Trash2Icon } from "lucide-react";
+import { CalendarPlusIcon, CheckIcon, ExternalLinkIcon, Loader2Icon, SparklesIcon, Trash2Icon } from "lucide-react";
 import type { ScriptStatus } from "@/lib/generated/prisma/enums";
 import type { ActionState } from "@/lib/actions";
 import { formatMultiplier } from "@/lib/format";
@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { notify } from "@/components/forms";
 import { deleteScriptAction, reviseScriptAction, updateScriptAction } from "@/app/(app)/p/[projectId]/factory-actions";
+import { planFromScriptAction } from "@/app/(app)/p/[projectId]/content-plan/actions";
 
 export const SCRIPT_STATUS_LABELS: Record<ScriptStatus, string> = {
   REVIEW: "На одобрении",
@@ -34,6 +35,8 @@ export type ScriptCardData = {
   auto: boolean;
   reference: { url: string; username: string; multiplier: number | null } | null;
   lastRevision: string | null;
+  /** Уже стоит в контент-плане */
+  inPlan: boolean;
 };
 
 const textareaClass =
@@ -80,6 +83,16 @@ export function ScriptCard({ projectId, script, canEdit }: { projectId: string; 
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              size="icon"
+              variant="ghost"
+              disabled={pending || script.inPlan}
+              title={script.inPlan ? "Уже в контент-плане" : "В контент-план"}
+              aria-label={script.inPlan ? "Уже в контент-плане" : "Поставить в контент-план"}
+              onClick={() => run(() => planFromScriptAction(projectId, script.id))}
+            >
+              <CalendarPlusIcon />
+            </Button>
             <Button
               size="icon"
               variant="ghost"
