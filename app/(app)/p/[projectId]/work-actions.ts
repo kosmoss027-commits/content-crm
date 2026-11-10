@@ -5,6 +5,7 @@ import { runAction, type ActionState } from "@/lib/actions";
 import { requireProjectContext } from "@/lib/auth/session";
 import { createCampaign, deleteCampaign, saveWarmupDay, updateCampaign, type CampaignInput, type DayInput } from "@/lib/db/warmups";
 import { createTask, deleteTask, setTaskStatus, updateTask, type TaskInput } from "@/lib/db/tasks";
+import { addExpense, deleteExpense, type ExpenseInput } from "@/lib/db/finance";
 import { createBoardItem, deleteBoardItem, updateBoardItem, type BoardItemInput, type BoardItemPatch } from "@/lib/db/board";
 
 // Прогревы и задачи. projectId всегда из URL: доступ проверяется заново в каждом действии.
@@ -80,3 +81,13 @@ export async function deleteBoardItemAction(projectId: string, id: string) {
 }
 
 export type BoardItemView = { id: string; kind: "STICKY" | "IMAGE"; x: number; y: number; width: number; height: number; text: string; color: string; imageUrl: string | null };
+
+// ─── P&L ───
+
+export async function addExpenseAction(projectId: string, input: ExpenseInput) {
+  return act(projectId, (ctx) => addExpense(ctx, input), "Расход записан", ["pnl"]);
+}
+
+export async function deleteExpenseAction(projectId: string, id: string) {
+  return act(projectId, (ctx) => deleteExpense(ctx, id), "Расход удалён", ["pnl"]);
+}
