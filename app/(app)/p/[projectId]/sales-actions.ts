@@ -16,6 +16,10 @@ import {
   updateKeyword,
   updateLead,
   type ClientInput,
+  createMagnet,
+  deleteMagnet,
+  updateMagnet,
+  type MagnetInput,
 } from "@/lib/db/sales";
 
 // projectId всегда из URL: доступ проверяется заново в каждом действии.
@@ -87,4 +91,24 @@ export async function addPaymentAction(projectId: string, clientId: string, inpu
 
 export async function deletePaymentAction(projectId: string, id: string) {
   return act(projectId, (ctx) => deletePayment(ctx, id), "Оплата удалена");
+}
+
+// ─── ЛМ-воронка ───
+
+export async function saveMagnetAction(projectId: string, id: string | null, input: MagnetInput & { archived?: boolean }) {
+  const result = await runAction(async () => {
+    const ctx = await requireProjectContext(projectId);
+    if (id) await updateMagnet(ctx, id, input);
+    else await createMagnet(ctx, input);
+  }, id ? "Сохранено" : "Лид-магнит добавлен");
+  revalidatePath(`/p/${projectId}/lead-magnets`);
+  return result;
+}
+
+export async function deleteMagnetAction(projectId: string, id: string) {
+  const result = await runAction(async () => {
+    await deleteMagnet(await requireProjectContext(projectId), id);
+  }, "Лид-магнит удалён");
+  revalidatePath(`/p/${projectId}/lead-magnets`);
+  return result;
 }

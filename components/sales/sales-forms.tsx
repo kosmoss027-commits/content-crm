@@ -21,6 +21,8 @@ import {
   saveClientAction,
   updateKeywordAction,
   updateLeadAction,
+  saveMagnetAction,
+  deleteMagnetAction,
 } from "@/app/(app)/p/[projectId]/sales-actions";
 
 
@@ -391,5 +393,73 @@ export function DeletePaymentButton({ projectId, id }: { projectId: string; id: 
     <Button size="icon" variant="ghost" disabled={pending} aria-label="Удалить оплату" onClick={() => confirm("Удалить запись об оплате?") && run(() => deletePaymentAction(projectId, id))}>
       <Trash2Icon />
     </Button>
+  );
+}
+
+// ─── ЛМ-воронка ───
+
+export type MagnetFormData = { name: string; description: string; url: string; keywordId: string | null };
+
+export function MagnetForm({ projectId, id, initial, keywords, onSaved }: { projectId: string; id: string | null; initial: MagnetFormData; keywords: Option[]; onSaved?: () => void }) {
+  const { pending, run } = useRun();
+  const [form, setForm] = useState(initial);
+  const set = <K extends keyof MagnetFormData>(key: K, value: MagnetFormData[K]) => setForm((f) => ({ ...f, [key]: value }));
+  return (
+    <form
+      className="grid gap-3 sm:grid-cols-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        run(() => saveMagnetAction(projectId, id, form), () => {
+          if (!id) setForm(initial);
+          onSaved?.();
+        });
+      }}
+    >
+      <Field label="Название">
+        <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Гайд «Как начать блог за 7 дней»" maxLength={120} required />
+      </Field>
+      <Field label="Кодовое слово, по которому выдаёте">
+        <select className={fieldClass} value={form.keywordId ?? ""} onChange={(e) => set("keywordId", e.target.value || null)}>
+          <option value="">—</option>
+          {keywords.map((k) => (
+            <option key={k.id} value={k.id}>
+              {k.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Ссылка на лид-магнит" className="sm:col-span-2">
+        <Input value={form.url} onChange={(e) => set("url", e.target.value)} placeholder="https://…" maxLength={500} />
+      </Field>
+      <Field label="Описание" className="sm:col-span-2">
+        <textarea className={areaClass} rows={2} value={form.description} onChange={(e) => set("description", e.target.value)} maxLength={1000} />
+      </Field>
+      <div className="sm:col-span-2">
+        <Button type="submit" disabled={pending || !form.name.trim()}>
+          {id ? "Сохранить" : "Добавить лид-магнит"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+export function MagnetRowActions({ projectId, magnet }: { projectId: string; magnet: { id: string; archived: boolean; data: MagnetFormData } }) {
+  const { pending, run } = useRun();
+  return (
+    <div className="flex justify-end gap-1">
+      <Button
+        size="icon"
+        variant="ghost"
+        disabled={pending}
+        title={magnet.archived ? "Вернуть из архива" : "В архив"}
+        aria-label={magnet.archived ? "Вернуть из архива" : "В архив"}
+        onClick={() => run(() => saveMagnetAction(projectId, magnet.id, { ...magnet.data, archived: !magnet.archived }))}
+      >
+        {magnet.archived ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
+      </Button>
+      <Button size="icon" variant="ghost" disabled={pending} aria-label="Удалить лид-магнит" onClick={() => confirm("Удалить лид-магнит?") && run(() => deleteMagnetAction(projectId, magnet.id))}>
+        <Trash2Icon />
+      </Button>
+    </div>
   );
 }

@@ -375,3 +375,110 @@ export async function publicationOptions(ctx: ProjectContext) {
     select: { id: true, title: true, date: true },
   });
 }
+
+// ─── ЛМ-воронка: лид-магниты ───
+
+const magnetInput = z.object({
+  name: z.string().trim().min(1, "Введите название").max(120, "Название — до 120 символов"),
+  description: text(1000, "Описание"),
+  url: z
+    .string()
+    .trim()
+    .max(500)
+    .default("")
+    .refine((v) => v === "" || /^https?:\/\/\S+$/i.test(v), "Ссылка должна начинаться с http:// или https://"),
+  keywordId: optionalId,
+});
+
+export type MagnetInput = z.input<typeof magnetInput>;
+
+async function freeKeywordId(ctx: ProjectContext, keywordId: string | null, exceptMagnetId?: string) {
+  const id = await ownKeywordId(ctx, keywordId);
+  if (!id) return null;
+  const taken = await prisma.leadMagnet.findFirst({ where: { keywordId: id, ...(exceptMagnetId ? { id: { not: exceptMagnetId } } : {}) }, select: { id: true } });
+  if (taken) throw new AppError("CONFLICT", "Это кодовое слово уже ведёт к другому лид-магниту.");
+  return id;
+}
+
+export async function createMagnet(ctx: ProjectContext, raw: MagnetInput) {
+  assertCan(ctx, "sales.manage");
+  const input = parseInput(magnetInput, raw);
+  const keywordId = await freeKeywordId(ctx, input.keywordId);
+  return prisma.leadMagnet.create({ data: { ...input, keywordId, workspaceId: ctx.workspaceId, projectId: ctx.projectId }, select: { id: true } });
+}
+
+export async function updateMagnet(ctx: ProjectContext, id: string, raw: MagnetInput & { archived?: boolean }) {
+  assertCan(ctx, "sales.manage");
+  const input = parseInput(magnetInput, raw);
+  const magnet = await prisma.leadMagnet.findFirst({ where: { id, projectId: ctx.projectId }, select: { id: true } });
+  if (!magnet) throw notFoundError();
+  const keywordId = await freeKeywordId(ctx, input.keywordId, magnet.id);
+  await prisma.leadMagnet.update({
+    where: { id: magnet.id },
+    data: { ...input, keywordId, ...(raw.archived === undefined ? {} : { archivedAt: raw.archived ? new Date() : null }) },
+  });
+}
+
+export async function deleteMagnet(ctx: ProjectContext, id: string) {
+  assertCan(ctx, "sales.manage");
+  const magnet = await prisma.leadMagnet.findFirst({ where: { id, projectId: ctx.projectId }, select: { id: true } });
+  if (!magnet) throw notFoundError();
+  await prisma.leadMagnet.delete({ where: { id: magnet.id } });
+}
+
+export type MagnetFunnelRow = {
+  id: string;
+  name: string;
+  description: string;
+  url: string;
+  keyword: { id: string; word: string } | null;
+  archived: boolean;
+  got: number;
+  clients: number;
+  buyers: number;
+  revenueRub: number;
+  conversionPct: number | null;
+};
+
+/**
+ * Воронка лид-магнита по его кодовому слову: получили (заявки со словом за период) → стали клиентами → купили (есть оплаты в периоде) → выручка.
+ */
+export async function magnetFunnel(ctx: ProjectContext, range: Range): Promise<MagnetFunnelRow[]> {
+  const touched = timeRange(range);
+  const dated = dateRange(range);
+  const magnets = await prisma.leadMagnet.findMany({
+    where: { projectId: ctx.projectId },
+    orderBy: [{ archivedAt: { sort: "asc", nulls: "first" } }, { createdAt: "desc" }],
+    include: { keyword: { select: { id: true, word: true } } },
+  });
+  const keywordIds = magnets.flatMap((m) => (m.keywordId ? [m.keywordId] : []));
+  const [leads, payments] = await Promise.all([
+    prisma.lead.findMany({
+      where: { projectId: ctx.projectId, keywordId: { in: keywordIds }, ...(touched ? { firstTouchAt: touched } : {}) },
+      select: { keywordId: true, clientId: true },
+    }),
+    prisma.payment.findMany({
+      where: { projectId: ctx.projectId, client: { keywordId: { in: keywordIds } }, ...(dated ? { paidAt: dated } : {}) },
+      select: { amountRub: true, clientId: true, client: { select: { keywordId: true } } },
+    }),
+  ]);
+  return magnets.map((m) => {
+    const own = leads.filter((l) => l.keywordId === m.keywordId && m.keywordId);
+    const paid = payments.filter((p) => p.client.keywordId === m.keywordId && m.keywordId);
+    const got = own.length;
+    const buyers = new Set(paid.map((p) => p.clientId)).size;
+    return {
+      id: m.id,
+      name: m.name,
+      description: m.description,
+      url: m.url,
+      keyword: m.keyword,
+      archived: m.archivedAt !== null,
+      got,
+      clients: own.filter((l) => l.clientId).length,
+      buyers,
+      revenueRub: paid.reduce((sum, p) => sum + p.amountRub, 0),
+      conversionPct: got > 0 ? (buyers / got) * 100 : null,
+    };
+  });
+}
