@@ -69,8 +69,9 @@ export function WarmupBoard({ projectId, campaignId, initial, size, canEdit }: {
 
   const onPointerMove = (e: React.PointerEvent) => {
     if (!drag) return;
-    const dx = e.clientX - drag.startX;
-    const dy = e.clientY - drag.startY;
+    // Координаты целые: при масштабе браузера не 100% события приходят дробными
+    const dx = Math.round(e.clientX - drag.startX);
+    const dy = Math.round(e.clientY - drag.startY);
     if (drag.mode === "move") {
       patchLocal(drag.id, { x: clamp(drag.orig.x + dx, 0, size.width - drag.orig.width), y: clamp(drag.orig.y + dy, 0, size.height - drag.orig.height) });
     } else {
@@ -144,6 +145,7 @@ export function WarmupBoard({ projectId, campaignId, initial, size, canEdit }: {
           style={{ width: size.width, height: size.height, backgroundImage: "radial-gradient(circle, var(--border) 1px, transparent 1px)", backgroundSize: "24px 24px" }}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
           onPointerDown={() => {
             setSelected(null);
             setEditing(null);

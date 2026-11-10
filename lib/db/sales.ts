@@ -392,6 +392,12 @@ const magnetInput = z.object({
 
 export type MagnetInput = z.input<typeof magnetInput>;
 
+function magnetConflict(error: unknown): never {
+  // Одновременно сохранили второй магнит с тем же словом
+  if ((error as { code?: string }).code === "P2002") throw new AppError("CONFLICT", "Это кодовое слово уже ведёт к другому лид-магниту.");
+  throw error;
+}
+
 async function freeKeywordId(ctx: ProjectContext, keywordId: string | null, exceptMagnetId?: string) {
   const id = await ownKeywordId(ctx, keywordId);
   if (!id) return null;
@@ -404,7 +410,7 @@ export async function createMagnet(ctx: ProjectContext, raw: MagnetInput) {
   assertCan(ctx, "sales.manage");
   const input = parseInput(magnetInput, raw);
   const keywordId = await freeKeywordId(ctx, input.keywordId);
-  return prisma.leadMagnet.create({ data: { ...input, keywordId, workspaceId: ctx.workspaceId, projectId: ctx.projectId }, select: { id: true } });
+  return prisma.leadMagnet.create({ data: { ...input, keywordId, workspaceId: ctx.workspaceId, projectId: ctx.projectId }, select: { id: true } }).catch(magnetConflict);
 }
 
 export async function updateMagnet(ctx: ProjectContext, id: string, raw: MagnetInput & { archived?: boolean }) {
@@ -413,10 +419,12 @@ export async function updateMagnet(ctx: ProjectContext, id: string, raw: MagnetI
   const magnet = await prisma.leadMagnet.findFirst({ where: { id, projectId: ctx.projectId }, select: { id: true } });
   if (!magnet) throw notFoundError();
   const keywordId = await freeKeywordId(ctx, input.keywordId, magnet.id);
-  await prisma.leadMagnet.update({
-    where: { id: magnet.id },
-    data: { ...input, keywordId, ...(raw.archived === undefined ? {} : { archivedAt: raw.archived ? new Date() : null }) },
-  });
+  await prisma.leadMagnet
+    .update({
+      where: { id: magnet.id },
+      data: { ...input, keywordId, ...(raw.archived === undefined ? {} : { archivedAt: raw.archived ? new Date() : null }) },
+    })
+    .catch(magnetConflict);
 }
 
 export async function deleteMagnet(ctx: ProjectContext, id: string) {
@@ -441,7 +449,7 @@ export type MagnetFunnelRow = {
 };
 
 /**
- * Воронка лид-магнита по его кодовому слову: получили (заявки со словом за период) → стали клиентами → купили (есть оплаты в периоде) → выручка.
+ * Воронка лид-магнита по его кодовому слову: получили (разные люди с заявкой на слово за период) → стали клиентами → купили (оплаты в периоде) → выручка.
  */
 export async function magnetFunnel(ctx: ProjectContext, range: Range): Promise<MagnetFunnelRow[]> {
   const touched = timeRange(range);
@@ -455,7 +463,7 @@ export async function magnetFunnel(ctx: ProjectContext, range: Range): Promise<M
   const [leads, payments] = await Promise.all([
     prisma.lead.findMany({
       where: { projectId: ctx.projectId, keywordId: { in: keywordIds }, ...(touched ? { firstTouchAt: touched } : {}) },
-      select: { keywordId: true, clientId: true },
+      select: { keywordId: true, clientId: true, handle: true },
     }),
     prisma.payment.findMany({
       where: { projectId: ctx.projectId, client: { keywordId: { in: keywordIds } }, ...(dated ? { paidAt: dated } : {}) },
@@ -465,7 +473,8 @@ export async function magnetFunnel(ctx: ProjectContext, range: Range): Promise<M
   return magnets.map((m) => {
     const own = leads.filter((l) => l.keywordId === m.keywordId && m.keywordId);
     const paid = payments.filter((p) => p.client.keywordId === m.keywordId && m.keywordId);
-    const got = own.length;
+    // Люди, а не заявки: один человек с двумя заявками — один «получил»
+    const got = new Set(own.map((l) => l.clientId ?? `h:${l.handle.toLowerCase()}`)).size;
     const buyers = new Set(paid.map((p) => p.clientId)).size;
     return {
       id: m.id,
@@ -475,7 +484,7 @@ export async function magnetFunnel(ctx: ProjectContext, range: Range): Promise<M
       keyword: m.keyword,
       archived: m.archivedAt !== null,
       got,
-      clients: own.filter((l) => l.clientId).length,
+      clients: new Set(own.flatMap((l) => (l.clientId ? [l.clientId] : []))).size,
       buyers,
       revenueRub: paid.reduce((sum, p) => sum + p.amountRub, 0),
       conversionPct: got > 0 ? (buyers / got) * 100 : null,

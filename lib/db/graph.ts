@@ -1,6 +1,6 @@
 // Граф связей проекта: ролик-референс → сценарий → публикация → заявки и деньги. Только чтение, только свой проект.
 import { prisma } from "@/lib/db/prisma";
-import type { ProjectContext } from "@/lib/db/access";
+import { assertCan, type ProjectContext } from "@/lib/db/access";
 import { dateToDay } from "@/lib/content/dates";
 
 const GRAPH_LIMIT = 40;
@@ -18,6 +18,7 @@ export type GraphChain = {
  * Деньги публикации — оплаты клиентов, чья заявка пришла с этой публикации (первое касание).
  */
 export async function connectionChains(ctx: ProjectContext): Promise<GraphChain[]> {
+  assertCan(ctx, "finance.manage");
   const publications = await prisma.publication.findMany({
     where: {
       projectId: ctx.projectId,
@@ -45,13 +46,23 @@ export async function connectionChains(ctx: ProjectContext): Promise<GraphChain[
   });
 
   const clientIds = [...new Set(publications.flatMap((p) => p.leads.flatMap((l) => (l.clientId ? [l.clientId] : []))))];
-  const payments = clientIds.length
-    ? await prisma.payment.findMany({ where: { projectId: ctx.projectId, clientId: { in: clientIds } }, select: { clientId: true, amountRub: true } })
-    : [];
+  const [payments, firstLeads] = clientIds.length
+    ? await Promise.all([
+        prisma.payment.findMany({ where: { projectId: ctx.projectId, clientId: { in: clientIds } }, select: { clientId: true, amountRub: true } }),
+        prisma.lead.findMany({
+          where: { projectId: ctx.projectId, clientId: { in: clientIds } },
+          orderBy: { firstTouchAt: "asc" },
+          select: { clientId: true, publicationId: true },
+        }),
+      ])
+    : [[], []];
+  // Клиент засчитывается одной публикации — той, с которой пришла его самая ранняя заявка
+  const firstPublication = new Map<string, string | null>();
+  for (const lead of firstLeads) if (lead.clientId && !firstPublication.has(lead.clientId)) firstPublication.set(lead.clientId, lead.publicationId);
 
   return publications.map((p) => {
     const reel = p.referenceReel ?? p.script?.analysis?.reel ?? null;
-    const buyers = new Set(p.leads.flatMap((l) => (l.clientId ? [l.clientId] : [])));
+    const buyers = new Set(p.leads.flatMap((l) => (l.clientId && firstPublication.get(l.clientId) === p.id ? [l.clientId] : [])));
     const revenueRub = payments.filter((pay) => buyers.has(pay.clientId)).reduce((sum, pay) => sum + pay.amountRub, 0);
     return {
       reel: reel
