@@ -44,7 +44,14 @@ export default async function CampaignPage({ params }: PageProps<"/p/[projectId]
       <PageHeader
         title={campaign.name}
         description={`${shortDay(start)} — ${shortDay(end)}${sales ? ` · старт продаж ${shortDay(sales)}` : ""}${campaign.product ? ` · ${campaign.product}` : ""}`}
-        actions={canEdit ? <DeleteCampaignButton projectId={projectId} id={campaign.id} /> : undefined}
+        actions={
+          <div className="flex gap-2">
+            <Link href={`/p/${projectId}/warmups/${campaign.id}/board`} className="inline-flex h-8 items-center rounded-md border px-3 text-sm hover:bg-muted">
+              Доска
+            </Link>
+            {canEdit && <DeleteCampaignButton projectId={projectId} id={campaign.id} />}
+          </div>
+        }
       />
 
       {canEdit && (

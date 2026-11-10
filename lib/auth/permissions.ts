@@ -17,7 +17,8 @@ export type Action =
   | "settings.view"
   | "research.manage" // добавлять аккаунты в разведку, запускать сбор, отмечать ролики
   | "content.manage" // контент-план, публикации, статистика, подключение Instagram
-  | "sales.manage"; // кодовые слова, заявки, клиенты, оплаты
+  | "sales.manage" // кодовые слова, заявки, клиенты, оплаты
+  | "finance.manage"; // P&L: расходы
 
 const ACTIONS: Record<Action, Role[]> = {
   "project.manage": ["OWNER"],
@@ -26,6 +27,7 @@ const ACTIONS: Record<Action, Role[]> = {
   "research.manage": ["OWNER", "ASSISTANT", "SMM"],
   "content.manage": ["OWNER", "ASSISTANT", "SMM"],
   "sales.manage": ["OWNER", "MANAGER"],
+  "finance.manage": ["OWNER"],
 };
 
 export function can(role: Role, action: Action): boolean {

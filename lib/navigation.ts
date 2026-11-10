@@ -19,7 +19,10 @@ export type IconName =
   | "flame"
   | "check-square"
   | "user-cog"
-  | "settings";
+  | "settings"
+  | "magnet"
+  | "wallet"
+  | "network";
 
 export type Section = {
   slug: string;
@@ -51,6 +54,9 @@ export const SECTIONS: Section[] = [
   { slug: "leads", title: "Заявки", description: "Входящие лиды до квалификации.", group: "crm", icon: "inbox", stage: 5, roles: SECTION_ROLES.sales },
   { slug: "clients", title: "Клиенты", description: "Контакты, источник, оплаты, заметки и история.", group: "crm", icon: "users", stage: 5, roles: SECTION_ROLES.sales },
   { slug: "warmups", title: "Прогревы", description: "Кампании прогрева, календарь на 3 месяца, рубрики и смыслы.", group: "crm", icon: "flame", stage: 6, roles: SECTION_ROLES.content },
+  { slug: "lead-magnets", title: "ЛМ-воронка", description: "Лид-магниты: сколько людей получили и сколько из них купили.", group: "crm", icon: "magnet", stage: 7, roles: SECTION_ROLES.sales },
+  { slug: "pnl", title: "P&L", description: "Доходы и расходы по месяцам.", group: "crm", icon: "wallet", stage: 7, roles: SECTION_ROLES.owner },
+  { slug: "graph", title: "Связи", description: "Ролик-референс → сценарий → публикация → кодовое слово → заявки → деньги.", group: "crm", icon: "network", stage: 7, roles: SECTION_ROLES.owner },
   { slug: "tasks", title: "Задачи", description: "Задачи с дедлайном, исполнителем и привязкой к публикации или клиенту.", group: "crm", icon: "check-square", stage: 6, roles: SECTION_ROLES.everyone },
 
   { slug: "team", title: "Команда", description: "Участники пространства и их роли.", group: "system", icon: "user-cog", stage: 1, roles: SECTION_ROLES.everyone },

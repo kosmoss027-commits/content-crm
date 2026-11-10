@@ -14,8 +14,7 @@ import {
   TelescopeIcon,
   UserCogIcon,
   UsersIcon,
-  type LucideIcon,
-} from "lucide-react";
+  type LucideIcon, MagnetIcon, NetworkIcon, WalletIcon } from "lucide-react";
 import type { IconName } from "@/lib/navigation";
 
 const ICONS: Record<IconName, LucideIcon> = {
@@ -34,6 +33,9 @@ const ICONS: Record<IconName, LucideIcon> = {
   "check-square": CheckSquareIcon,
   "user-cog": UserCogIcon,
   settings: SettingsIcon,
+  magnet: MagnetIcon,
+  wallet: WalletIcon,
+  network: NetworkIcon,
 };
 
 export function SectionIcon({ name, className }: { name: IconName; className?: string }) {

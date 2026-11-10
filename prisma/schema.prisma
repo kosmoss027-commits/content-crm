@@ -102,6 +102,9 @@ model Project {
   warmups          WarmupCampaign[]
   warmupDays       WarmupDay[]
   tasks            Task[]
+  boardItems       BoardItem[]
+  expenses         Expense[]
+  leadMagnets      LeadMagnet[]
 
   @@index([workspaceId])
 }
@@ -559,6 +562,7 @@ model Keyword {
   leads       Lead[]
   clients     Client[]
   mentions    KeywordMention[]
+  leadMagnet  LeadMagnet?
 
   @@unique([projectId, word])
 }
@@ -689,6 +693,7 @@ model WarmupCampaign {
   project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   days           WarmupDay[]
   publications   Publication[]
+  boardItems     BoardItem[]
 
   @@index([projectId, startDate])
 }
@@ -737,4 +742,65 @@ model Task {
 
   @@index([projectId, status, dueDate])
   @@index([assigneeId, status])
+}
+
+// ─── Этап 7: доска прогрева, P&L, лид-магниты ───────────────
+
+enum BoardItemKind {
+  STICKY
+  IMAGE
+}
+
+/// Стикер или картинка на доске прогрева. Координаты — в пикселях полотна.
+model BoardItem {
+  id          String         @id @default(cuid())
+  workspaceId String
+  projectId   String
+  campaignId  String
+  kind        BoardItemKind
+  x           Int
+  y           Int
+  width       Int            @default(200)
+  height      Int            @default(140)
+  text        String         @default("")
+  color       String         @default("amber")
+  imageUrl    String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  campaign    WarmupCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+}
+
+/// Расход для P&L (₽, вводится вручную).
+model Expense {
+  id          String   @id @default(cuid())
+  workspaceId String
+  projectId   String
+  amountRub   Int
+  category    String
+  note        String   @default("")
+  spentAt     DateTime @db.Date
+  createdAt   DateTime @default(now())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, spentAt])
+}
+
+/// Лид-магнит (гайд, чек-лист…) и кодовое слово, по которому его выдают.
+model LeadMagnet {
+  id          String    @id @default(cuid())
+  workspaceId String
+  projectId   String
+  name        String
+  description String    @default("")
+  url         String    @default("")
+  keywordId   String?   @unique
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  keyword     Keyword?  @relation(fields: [keywordId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
 }
