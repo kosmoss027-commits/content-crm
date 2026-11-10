@@ -90,7 +90,12 @@ export function WarmupBoard({ projectId, campaignId, initial, size, canEdit }: {
   const start = (e: React.PointerEvent, item: BoardItemView, mode: Drag["mode"]) => {
     if (!canEdit || editing === item.id) return;
     e.stopPropagation();
-    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    try {
+      // Тащим даже если курсор выскочил за край элемента; на старых браузерах без захвата просто работает хуже
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    } catch {
+      /* захват указателя недоступен — перетаскивание всё равно работает через полотно */
+    }
     setSelected(item.id);
     setDrag({ id: item.id, mode, startX: e.clientX, startY: e.clientY, orig: item });
   };
